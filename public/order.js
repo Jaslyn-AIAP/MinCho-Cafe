@@ -46,6 +46,38 @@
   let turnstileToken = '';
   let turnstileWidget = null;
 
+  // Why the shop can't take orders right now, or '' if it can.
+  //   'paused'   — the owners unticked "Shop open"
+  //   'no-dates' — open, but no collection date is before its cutoff
+  //                (e.g. the last round closed and the next date isn't added yet)
+  const closedReason = (m) => (!m.orderingOpen ? 'paused' : m.dates.length === 0 ? 'no-dates' : '');
+  // Wording for the shop-closed page, per reason. The sign changes too:
+  // 'paused' is the "Shop closed" sign, 'no-dates' the "Orders paused" sign
+  // (tilted the other way and with a small-caps subtitle; see styles.css).
+  const CLOSED_TEXT = {
+    'paused': {
+      eyebrow: 'Order window', eyebrowZh: '暫停營業',
+      zh: '今日休息', title: 'Shop closed', sub: 'Our kettles are resting for now.',
+      head: 'We’ll be pouring again soon.',
+      body: 'Ming Ming and QQ are taking a breather between brews. We’ll post in the WhatsApp group when orders open again.',
+    },
+    'no-dates': {
+      eyebrow: 'Order status', eyebrowZh: '今期截單',
+      zh: '今期截單', title: 'Orders paused', sub: 'Shop open · Next dates soon',
+      head: 'This order window has closed.',
+      body: 'All current brew dates are past their order cut-off. Ming Ming and QQ are catching their breath—we’ll post in the WhatsApp group when the next window opens.',
+    },
+  };
+
+  function setClosedWording(why) {
+    const text = CLOSED_TEXT[why];
+    $('closed').dataset.reason = why; // styles.css switches the sign's tilt and subtitle style on this
+    for (const [id, key] of [['closed-eyebrow', 'eyebrow'], ['closed-eyebrow-zh', 'eyebrowZh'], ['closed-zh', 'zh'],
+      ['closed-title', 'title'], ['closed-sub', 'sub'], ['closed-head', 'head'], ['closed-text', 'body']]) {
+      $(id).textContent = text[key];
+    }
+  }
+
   const storage = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode: ignore */ } },
@@ -93,12 +125,23 @@
   function renderOrderForm() {
     $('gate').hidden = true;
     $('order-form').hidden = false;
-    $('paused').hidden = menu.orderingOpen;
+
+    // Nothing can be ordered right now: show the shop-closed sign instead of a
+    // menu. Two reasons, same sign, different wording. (The server refuses
+    // orders in both cases anyway.)
+    const why = closedReason(menu);
+    $('closed').hidden = !why;
+    if (why) {
+      setClosedWording(why);
+      $('closed-msg').hidden = true;
+      $('order-form').hidden = true;
+      window.scrollTo({ top: 0 });
+      return;
+    }
 
     // Dates: radio cards with a vermilion date block ("17 / OCT")
     const dates = $('dates');
     dates.replaceChildren();
-    $('no-dates').hidden = menu.dates.length > 0;
     menu.dates.forEach((d, i) => {
       const at = new Date(`${d.date}T00:00:00+08:00`);
       const fmt = (opts) => at.toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', ...opts });
@@ -219,6 +262,7 @@
         : `${['packet', 'bottle'].filter((c) => counts[c]).map((c) => plural(counts[c], c)).join(' · ')}${fee ? ` incl. ${money(fee)} delivery` : freeNote}${nudge}`;
 
     $('submit').disabled = bottles === 0 || belowMin || !menu.orderingOpen || menu.dates.length === 0;
+
   }
 
   // ---------------------------------------------------------------------------
@@ -294,6 +338,36 @@
     $('notes').value = '';
     $('done').hidden = true;
     renderOrderForm();
+    window.scrollTo({ top: 0 });
+  });
+
+  // Shop closed → "Check again": re-ask the server with the same code.
+  // Still closed: say so with the time, so the tap visibly did something.
+  // Code no longer valid (owners made a new one): back to the invite page.
+  $('closed-retry').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const msg = $('closed-msg');
+    btn.disabled = true;
+    msg.hidden = true;
+    const { ok, status, data } = await post('/api/menu', { code }).catch(() => ({ ok: false, status: 0, data: { error: 'Network problem. Please try again.' } }));
+    btn.disabled = false;
+    const time = new Date().toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' });
+    if (ok) {
+      menu = data;
+      if (!closedReason(menu)) { renderOrderForm(); return; }
+      setClosedWording(closedReason(menu)); // still closed; the reason may have changed
+      msg.textContent = `Still closed (checked at ${time}).`;
+      msg.hidden = false;
+      return;
+    }
+    // Only a refused code (403) sends them back; a network or server hiccup just says so.
+    if (status !== 403) { msg.textContent = data.error || 'Could not check. Please try again.'; msg.hidden = false; return; }
+    storage.del('mincho_code');
+    code = '';
+    $('closed').hidden = true;
+    $('gate').hidden = false;
+    $('gate-error').textContent = data.error || 'Could not load the menu.';
+    $('gate-error').hidden = false;
     window.scrollTo({ top: 0 });
   });
 

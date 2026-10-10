@@ -22,6 +22,17 @@
     return node;
   };
   const todaySgt = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+
+  // Order cutoff for a date, as an instant. Mirrors cutoffInstant() in lib/rules.js,
+  // which is what the server uses; keep the two in step if the rule changes.
+  // Example: date 2026-10-17, 1 day before at 23:59 → Fri 16 Oct, 11:59 pm Singapore time.
+  // `rule` defaults to the saved settings; pass { cutoff_days, cutoff_time } to try a new rule.
+  function cutoffFor(isoDate, rule = settings) {
+    const [y, m, d] = isoDate.split('-').map(Number);
+    const [hh, mm, ss = 0] = String(rule.cutoff_time).split(':').map(Number);
+    return new Date(Date.UTC(y, m - 1, d - rule.cutoff_days, hh, mm, ss) - 8 * 3600e3);
+  }
+  const formatSgt = (when, opts) => new Intl.DateTimeFormat('en-SG', { timeZone: 'Asia/Singapore', ...opts }).format(when);
   const STATUSES = [
     ['awaiting_payment', 'Awaiting payment'],
     ['paid', 'Paid'],
@@ -39,11 +50,25 @@
   /** Show a Supabase error in a status element (or the console). */
   /** Show a status line in a message element: kind 'ok' (green, ✓, with time) or 'bad' (red, ✗, with time). */
   function say(el, text, kind) {
-    el.classList.remove('status-ok', 'status-bad');
-    if (kind) el.classList.add(kind === 'ok' ? 'status-ok' : 'status-bad');
-    const time = new Date().toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' });
-    // Failures get a cross and capitalised wording, so they don't rely on colour alone
-    el.textContent = kind === 'ok' ? `✓ ${text} at ${time}` : kind === 'bad' ? `✗ ${text} (${time})` : text;
+    el.classList.remove('status-ok', 'status-warn', 'status-bad');
+    if (kind) el.classList.add(`status-${kind}`);
+    // Failures get a cross and capitalised wording, so they don't rely on colour alone.
+    // The timestamp goes on its own last line, e.g. "2026-10-11 00:20" (Singapore time).
+    const symbol = { ok: '✓', warn: '⚠', bad: '✗' }[kind];
+    el.textContent = symbol ? `${symbol} ${text}\n${stampSgt()}` : text;
+  }
+
+  /** Current Singapore time as "2026-10-11 00:20", whatever the device's time zone. */
+  const stampSgt = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
+
+  /** A Singapore date-time as "Tue 13 Oct 2026, 11:59 pm" (matches the order page's style, plus the year). */
+  function longSgt(when) {
+    const t = new Date(when.getTime() + 8 * 3600e3); // read the UTC fields as Singapore wall-clock time
+    const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][t.getUTCDay()];
+    const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][t.getUTCMonth()];
+    const h = t.getUTCHours();
+    const time = `${h % 12 || 12}:${String(t.getUTCMinutes()).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+    return `${day} ${t.getUTCDate()} ${month} ${t.getUTCFullYear()}, ${time}`;
   }
 
   /** Turn a Supabase sign-in error into a plain message. */
@@ -179,9 +204,42 @@
     renderDates();
     renderMenu();
     renderSettings();
+    renderShopStatus();
     await loadOrders();
     await loadOwners();
   }
+
+  // ---------------------------------------------------------------------------
+  // "What customers see now" line above the tabs. Same rule as the order page:
+  //   Shop open unticked            → "Shop closed" sign
+  //   no active date before cutoff  → "Orders paused" sign (shop is open, but nothing to order)
+  //   otherwise                     → customers can order
+  // Re-checked every minute, because a cutoff can pass while this page is open.
+  // ---------------------------------------------------------------------------
+  function renderShopStatus() {
+    const box = $('shop-status');
+    if (!settings) return;
+    const now = Date.now();
+    const open = dates.filter((d) => d.active && now <= cutoffFor(d.delivery_date).getTime());
+    box.classList.remove('status-ok', 'status-warn', 'status-bad');
+    const goTo = (tab, label) => {
+      const btn = el('button', { type: 'button', className: 'link', textContent: label });
+      btn.addEventListener('click', () => document.querySelector(`[data-tab="${tab}"]`).click());
+      return btn;
+    };
+    if (!settings.ordering_open) {
+      box.classList.add('status-bad');
+      box.replaceChildren('✗ Customers see the "Shop closed" sign. ', goTo('settings', 'Tick Shop open in Settings'), ' to take orders.');
+    } else if (open.length === 0) {
+      box.classList.add('status-warn');
+      box.replaceChildren('⚠ Customers see the "Orders paused" sign: no date is open for orders. ', goTo('dates', 'Add a future date in Dates'), ' to take orders.');
+    } else {
+      box.classList.add('status-ok');
+      const list = open.map((d) => `${formatSgt(new Date(`${d.delivery_date}T12:00:00+08:00`), { weekday: 'short', day: 'numeric', month: 'short' })} (orders close ${formatSgt(cutoffFor(d.delivery_date), { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })})`);
+      box.replaceChildren(`✓ Taking orders for ${list.join('; ')}.`);
+    }
+  }
+  setInterval(renderShopStatus, 60e3);
 
   // ---------------------------------------------------------------------------
   // Tabs
@@ -329,6 +387,7 @@
         if (error) { report(error); active.checked = d.active; return; }
         d.active = active.checked;
         renderDateSelect();
+        renderShopStatus();
       });
       const del = el('button', { type: 'button', className: 'small secondary', textContent: 'Delete' });
       confirmTap(del, 'Delete', async () => {
@@ -448,12 +507,19 @@
     $('invite-link').textContent = `${location.origin}/?code=${encodeURIComponent(settings.invite_code)}`;
   }
 
+  // Two-tap guard for Save: armedFor remembers which change was warned about,
+  // so a second tap only confirms that same change (editing a field re-warns).
+  let armedFor = '';
+  let armedTimer;
+  const SAVE_LABEL = $('save-settings').textContent;
+  const dayLabel = (iso) => formatSgt(new Date(`${iso}T12:00:00+08:00`), { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '');
+
   $('save-settings').addEventListener('click', async () => {
     const msg = $('settings-msg');
+    const btn = $('save-settings');
     const toCents = (v) => Math.max(0, Math.round(Number(v || 0) * 100));
     const paynow = $('s-paynow').value.replace(/\s/g, '');
     if (!/^[89]\d{7}$/.test(paynow)) { say(msg, 'FAILED TO SAVE. PayNow number must be an 8-digit Singapore mobile number (starts with 8 or 9).', 'bad'); return; }
-    say(msg, 'Saving…');
     const update = {
       ordering_open: $('s-open').checked,
       delivery_enabled: $('s-delivery').checked,
@@ -467,11 +533,51 @@
       retention_days: Math.min(730, Math.max(7, parseInt($('s-retention').value || '90', 10))),
       updated_at: new Date().toISOString(),
     };
+    // Dates that are open for orders now, but would be past their cutoff under the new rule
+    const now = Date.now();
+    const closing = dates.filter((d) => d.active
+      && now <= cutoffFor(d.delivery_date).getTime()
+      && now > cutoffFor(d.delivery_date, update).getTime());
+    const key = closing.length ? `${update.cutoff_days}|${update.cutoff_time}|${closing.map((d) => d.id).join(',')}` : '';
+    clearTimeout(armedTimer);
+    btn.textContent = SAVE_LABEL;
+    if (key && key !== armedFor) {
+      armedFor = key;
+      btn.textContent = 'Tap again to confirm';
+      const names = closing.map((d) => dayLabel(d.delivery_date));
+      const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+      say(msg, `This closes orders for ${list} now. Tap Save again to confirm.`, 'warn');
+      // Not confirmed within 10 seconds: stand down, nothing saved
+      armedTimer = setTimeout(() => { armedFor = ''; btn.textContent = SAVE_LABEL; say(msg, 'Not saved, so nothing changed for customers. Tap Save to try again.', 'warn'); }, 10000);
+      return;
+    }
+    armedFor = '';
+    say(msg, 'Saving…');
+
+    const before = settings;
     const { data, error } = await sb.from('settings').update(update).eq('id', 1).select().single();
     if (error) { say(msg, `FAILED TO SAVE. ${report(error)}`, 'bad'); return; }
     settings = data;
     renderSettings();
-    say(msg, data.ordering_open ? 'Saved. Ordering is OPEN' : 'Saved. Ordering is CLOSED', 'ok');
+    renderShopStatus();
+    const lines = [`Saved. Shop is ${data.ordering_open ? 'OPEN' : 'CLOSED'}.`];
+    // If the cutoff rule changed, spell out the new cutoff for each upcoming date,
+    // so owners can check it, and see straight away if a date has just closed.
+    if (before.cutoff_days !== data.cutoff_days || String(before.cutoff_time).slice(0, 5) !== String(data.cutoff_time).slice(0, 5)) {
+      const n = data.cutoff_days;
+      const when = n === 0 ? 'on the day' : `${n} day${n === 1 ? '' : 's'} before`;
+      lines.push(`Order cutoff changed to ${when}:`);
+      const upcoming = dates.filter((d) => d.active && d.delivery_date >= todaySgt());
+      if (upcoming.length === 0) lines.push('• No upcoming active dates.');
+      for (const d of upcoming) {
+        const cut = cutoffFor(d.delivery_date);
+        const date = formatSgt(new Date(`${d.delivery_date}T12:00:00+08:00`), { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '');
+        lines.push(Date.now() > cut.getTime()
+          ? `• ${date} collection: orders ALREADY CLOSED (cutoff was ${longSgt(cut)})`
+          : `• ${date} collection: orders close ${longSgt(cut)}`);
+      }
+    }
+    say(msg, lines.join('\n'), 'ok');
   });
 
   $('copy-code').addEventListener('click', (e) => copy(settings.invite_code, e.currentTarget));

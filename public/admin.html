@@ -62,6 +62,9 @@
         <span id="who" class="hint"></span>
         <button id="logout" class="small secondary" type="button">Log out</button>
       </div>
+      <!-- What customers see right now (filled by admin.js, shown on every tab) -->
+      <div id="shop-status" class="shop-status" role="status"></div>
+
       <nav class="tabs" role="tablist">
         <button type="button" role="tab" data-tab="orders" aria-selected="true">Orders</button>
         <button type="button" role="tab" data-tab="dates" aria-selected="false">Dates</button>
@@ -91,7 +94,7 @@
           <input id="new-date-note" type="text" placeholder="Note (optional)" maxlength="80" class="w-240">
           <button type="submit" class="small">Add date</button>
         </form>
-        <p class="hint">Customers only see active dates that are still before the order cutoff.</p>
+        <p class="hint">Customers only see active dates that are still before the order cutoff. If none is left, customers see an "Orders paused" sign until you add one.</p>
         <div class="table-wrap"><table class="grid" id="dates-table"></table></div>
       </section>
 
@@ -123,7 +126,10 @@
       <!-- Settings -->
       <section id="tab-settings" class="panel stack" hidden>
         <h2>Settings</h2>
-        <label class="switch"><input id="s-open" type="checkbox"> Ordering open</label>
+        <div>
+          <label class="switch"><input id="s-open" type="checkbox"> Shop open</label>
+          <p class="hint">Unticked: customers see a "Shop closed" sign. Ticked but no date open in <b>Dates</b>: they see "Orders paused" until you add one.</p>
+        </div>
         <label class="switch"><input id="s-delivery" type="checkbox"> Offer delivery (asks customers for an address)</label>
         <div class="row">
           <div><label for="s-fee">Delivery fee ($)</label><input id="s-fee" type="number" min="0" step="0.5"></div>

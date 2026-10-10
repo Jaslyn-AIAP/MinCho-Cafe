@@ -63,7 +63,7 @@
 
 * { box-sizing: border-box; }
 /* Anything marked hidden stays hidden, even if a class gives it display:grid/flex.
-   (Without this, the invite card and the "paused" notice stayed visible.) */
+   (Without this, the invite card stayed visible when hidden.) */
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -257,9 +257,13 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ---- Messages ---------------------------------------------------------------------- */
 .error { color: var(--bad); font-weight: 700; margin: 8px 0 0; }
-.status-ok, .status-bad { font-weight: 700; font-size: 1rem; padding: 8px 12px; border-left: 4px solid; }
+.status-ok, .status-bad { font-weight: 700; font-size: 1rem; padding: 8px 12px; border-left: 4px solid; white-space: pre-line; /* keep the line breaks in multi-line messages */ }
 .status-ok { color: var(--ok); border-color: var(--ok); background: var(--paper-2); }
 .status-bad { color: var(--bad); border-color: var(--bad); background: var(--paper-2); }
+.status-warn { font-weight: 700; font-size: 1rem; padding: 8px 12px; border-left: 4px solid; white-space: pre-line; color: var(--warn); border-color: var(--warn); background: var(--paper-2); }
+/* Admin: what customers see right now, above the tabs */
+.shop-status { margin: 12px 0 4px; line-height: 1.45; }
+.shop-status button.link { margin: 0; color: inherit; font-weight: 700; }
 .notice { display: flex; gap: 10px; border: 1px solid var(--red); background: #f4ddd4; color: #7d2717; padding: 10px 14px; font-weight: 600; font-size: 0.92rem; }
 
 /* ---- Receipt: carbon-copy order chit ------------------------------------------ */
@@ -376,3 +380,44 @@ a.wa { color: var(--jade); font-size: 0.9rem; font-weight: 600; text-decoration:
   #orders-table td:nth-child(2), #orders-table td:nth-child(3), #orders-table td:nth-child(5) { grid-column: 1 / -1; }
   #orders-table td:nth-child(5) select { width: 100%; margin-top: 2px; }
 }
+
+/* -----------------------------------------------------------------------------
+   Shop closed: a hanging sign, shown when the owners untick "Shop open".
+   The sign is cream "paper" like the cards, so it keeps --ink text in dark mode;
+   the rail and strings use --header-ink so they show on both page colours.
+   -------------------------------------------------------------------------- */
+.closed { max-width: 640px; margin: 0 auto; padding-block: clamp(28px, 6vw, 56px) 40px; text-align: center; color: var(--page-ink); }
+.closed .eyebrow { margin-bottom: 14px; }
+.hanger { width: min(100%, 460px); margin: 0 auto clamp(28px, 6vw, 44px); }
+.rail { display: block; width: 78%; height: auto; margin: 0 auto -4px; overflow: visible; }
+.rail .string { stroke: var(--header-ink); stroke-width: 2; stroke-linecap: round; }
+.rail .bar { fill: var(--lemon); stroke: var(--header-ink); stroke-width: 1.5; }
+.rail .clip { fill: var(--paper); stroke: var(--header-ink); stroke-width: 1.5; }
+.sign {
+  position: relative; background: var(--paper); color: var(--ink);
+  border: 7px solid var(--jade); box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--jade), 10px 10px 0 var(--shadow);
+  padding: clamp(22px, 5vw, 34px) clamp(18px, 5vw, 36px) clamp(18px, 4vw, 26px);
+  transform: rotate(-2deg);
+}
+.nail { position: absolute; top: 12px; width: 9px; height: 9px; border-radius: 50%; background: var(--lemon); border: 1.5px solid var(--header-ink); }
+.nail-l { left: 12px; } .nail-r { right: 12px; }
+.sign-zh { margin: 0; font-family: var(--font-hanzi); font-weight: 700; font-size: 1.15rem; letter-spacing: 0.3em; color: var(--jade); }
+.sign-title {
+  margin: 6px 0 14px; font-family: var(--font-display); font-weight: 500; text-transform: uppercase;
+  font-size: clamp(2.7rem, 12vw, 4.4rem); line-height: 0.95; letter-spacing: -0.01em; color: var(--red);
+}
+.sign-rule { display: flex; align-items: center; gap: 0; }
+.sign-rule::before, .sign-rule::after { content: ""; flex: 1; height: 2px; background: var(--jade); }
+.sign-diamond { width: 28px; height: 28px; margin: 0 6px; border: 1.5px solid var(--jade); transform: rotate(45deg); display: grid; place-items: center; background: var(--paper); }
+.sign-diamond svg { width: 16px; height: 16px; transform: rotate(-45deg); fill: none; stroke: var(--jade); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.sign-sub { margin: 14px 0 0; color: var(--muted); font-weight: 600; }
+.closed-head { font-family: var(--font-display); font-weight: 500; font-size: clamp(1.5rem, 5vw, 2rem); margin: 0 0 8px; color: var(--page-ink); }
+.closed-text { margin: 0 auto; max-width: 44ch; color: var(--page-muted); }
+.closed button.back { margin-top: 24px; }
+.closed-msg { margin: 12px 0 0; color: var(--page-muted); font-size: 0.92rem; }
+.closed-foot { margin: 36px 0 0; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--page-muted); }
+
+/* "Orders paused" variant (open, but every date is past its cutoff):
+   the sign hangs the other way, and the subtitle is a small-caps mono line. */
+.closed[data-reason="no-dates"] .sign { transform: rotate(2deg); }
+.closed[data-reason="no-dates"] .sign-sub { font-family: var(--font-mono); font-weight: 500; font-size: 0.85rem; letter-spacing: 0.14em; text-transform: uppercase; }

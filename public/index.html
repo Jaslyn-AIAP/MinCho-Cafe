@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,700&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
   <!-- Chinese labels: only the characters actually used are downloaded (text= subset) -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700&display=swap&text=%E6%B8%AF%E5%BC%8F%E8%8C%B6%E8%87%AA%E5%AE%B6%E6%B2%96%E8%A3%BD%E5%B0%8F%E5%BA%97%E5%87%BA%E5%93%81%E6%9C%8B%E5%8F%8B%E9%99%90%E5%AE%9A%E5%A5%B6%E6%AA%B8%E5%8F%96%E8%B2%A8%E6%97%A5%E6%9C%9F%E9%81%B8%E6%93%87%E9%A3%B2%E6%96%B9%E4%BD%A0%E7%9A%84%E8%B3%87%E6%96%99%E4%BB%8A%E4%BE%9B%E6%87%89%E6%A8%BD%E8%A3%9D%E5%A4%9A%E8%AC%9D%E5%B7%B2%E6%94%B6%E5%88%B0%E8%A8%82%E5%96%AE%E7%B7%A8%E8%99%9F%E4%B8%8B%E4%B8%80%E6%AD%A5%E6%99%92%E5%BE%8C%E5%8F%B0">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700&display=swap&text=%E6%B8%AF%E5%BC%8F%E8%8C%B6%E8%87%AA%E5%AE%B6%E6%B2%96%E8%A3%BD%E5%B0%8F%E5%BA%97%E5%87%BA%E5%93%81%E6%9C%8B%E5%8F%8B%E9%99%90%E5%AE%9A%E5%A5%B6%E6%AA%B8%E5%8F%96%E8%B2%A8%E6%97%A5%E6%9C%9F%E9%81%B8%E6%93%87%E9%A3%B2%E6%96%B9%E4%BD%A0%E7%9A%84%E8%B3%87%E6%96%99%E4%BB%8A%E4%BE%9B%E6%87%89%E6%A8%BD%E8%A3%9D%E5%A4%9A%E8%AC%9D%E5%B7%B2%E6%94%B6%E5%88%B0%E8%A8%82%E5%96%AE%E7%B7%A8%E8%99%9F%E4%B8%8B%E4%B8%80%E6%AD%A5%E6%99%92%E5%BE%8C%E5%8F%B0%E4%BC%91%E6%81%AF%E6%9A%AB%E5%81%9C%E7%87%9F%E6%A5%AD%E6%AC%A1%E5%B9%AB%E8%A5%AF%E6%88%AA">
   <link rel="stylesheet" href="/styles.css">
   <script src="/theme.js"></script>
 </head>
@@ -66,14 +66,12 @@
         <p class="lede">Choose your tea for the next collection. Everything is brewed in small batches by Ming Ming and QQ.</p>
         <button id="change-code" type="button" class="link">Use a different code</button>
       </div>
-      <p id="paused" class="notice" hidden>Ordering is paused right now. Please check back soon.</p>
 
       <div class="order-grid">
         <div class="sections">
           <section class="panel">
             <div class="step-head"><span class="step-num">01</span><div><small lang="zh-Hant">取貨日期</small><h2>Pick a date</h2></div></div>
             <div id="dates" class="choices" role="radiogroup" aria-label="Collection date"></div>
-            <p id="no-dates" class="hint" hidden>No dates are open right now. Please check back soon.</p>
           </section>
 
           <section class="panel">
@@ -134,6 +132,36 @@
         </aside>
       </div>
     </form>
+
+    <!-- ===================== SHOP CLOSED (ordering paused, or no open dates; wording set by order.js) ===================== -->
+    <section id="closed" class="closed" data-reason="paused" hidden aria-labelledby="closed-title">
+      <p class="eyebrow"><span id="closed-eyebrow">Order window</span> · <span id="closed-eyebrow-zh" lang="zh-Hant">暫停營業</span></p>
+      <div class="hanger">
+        <!-- Rail, clips and strings: decoration only -->
+        <svg class="rail" viewBox="0 0 360 96" aria-hidden="true" focusable="false">
+          <line class="string" x1="29" y1="20" x2="92" y2="96"/>
+          <line class="string" x1="331" y1="20" x2="268" y2="96"/>
+          <rect class="bar" x="1" y="5" width="358" height="9" rx="1"/>
+          <rect class="clip" x="22" y="1" width="14" height="19" rx="1"/>
+          <rect class="clip" x="324" y="1" width="14" height="19" rx="1"/>
+        </svg>
+        <div class="sign">
+          <span class="nail nail-l" aria-hidden="true"></span><span class="nail nail-r" aria-hidden="true"></span>
+          <p id="closed-zh" class="sign-zh" lang="zh-Hant">今日休息</p>
+          <h1 id="closed-title" class="sign-title">Shop closed</h1>
+          <div class="sign-rule" aria-hidden="true">
+            <span class="sign-diamond"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 20V9M12 13c-3 0-5-2-5-5 3 0 5 2 5 5zM12 11c0-3 2-5 5-5 0 3-2 5-5 5zM12 9c-1.5-1.5-1.5-3.5 0-5 1.5 1.5 1.5 3.5 0 5z"/></svg></span>
+          </div>
+          <p id="closed-sub" class="sign-sub">Our kettles are resting for now.</p>
+        </div>
+      </div>
+      <p class="eyebrow">Next brew · <span lang="zh-Hant">下次沖茶</span></p>
+      <h2 id="closed-head" class="closed-head">We'll be pouring again soon.</h2>
+      <p id="closed-text" class="closed-text">Ming Ming and QQ are taking a breather between brews. We’ll post in the WhatsApp group when orders open again.</p>
+      <button id="closed-retry" type="button" class="secondary back">↻ Check again</button>
+      <p id="closed-msg" class="closed-msg" role="status" hidden></p>
+      <p class="mono closed-foot">Hand-brewed in Singapore · <span lang="zh-Hant">多謝幫襯</span></p>
+    </section>
 
     <!-- ===================== STEP 3: order chit ===================== -->
     <section id="done" hidden aria-live="polite">

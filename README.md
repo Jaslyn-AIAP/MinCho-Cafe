@@ -95,7 +95,7 @@ For now Jaslyn owns all three accounts (agreed with the owners while the custome
 2. **Settings → Owners:** add Ming Ming and QQ with a starting password each.
 3. **Settings:** enter QQ's real **PayNow number** (the database starts with a placeholder, 8000 0000, because this code is public) and Save.
 4. **Settings → Make a new code** (replaces the placeholder `CHANGE-ME-…` code).
-5. Check: collection note, cutoff (default 1 day before at 23:59), delivery off. Then tick **Ordering open** and Save. Ordering starts closed on purpose, so the shop can't take orders before the PayNow number is set.
+5. Check: collection note, cutoff (default 1 day before at 23:59), delivery off. Then tick **Shop open** and Save. The shop starts closed on purpose, so it can't take orders before the PayNow number is set. The line above the tabs always says what customers currently see.
 6. **Dates:** 17 Oct and 24 Oct 2026 are already there. Add future dates here.
 7. Place a test order with your own phone, check it appears under **Orders**, then set it to **Cancelled**.
 8. **Copy link** and share it in the WhatsApp group.
@@ -165,7 +165,7 @@ npm run dev                      # runs the site locally with wrangler
 - **PayNow is manual.** The site shows the number, amount and reference. It does not confirm payment; owners mark orders as paid. A PayNow QR code could be added later but should be tested carefully with real banking apps first.
 - **Customers can't edit or cancel orders themselves.** They message the owners, who change the status.
 - **The invite code is shared.** Anyone who has it can order. Rotate it if it spreads too far.
-- **No capacity limit per date** (as requested). Owners can pause ordering with the **Ordering open** switch.
+- **No capacity limit per date** (as requested). Owners can close the shop with the **Shop open** switch (customers see a "Shop closed" sign). When every active date is past its cutoff, customers see an "Orders paused" sign until a new date is added.
 - **Turnstile** blocks most bots but may challenge some VPN users.
 - **Free plan limits** (checked October 2026): Pages Functions share the Workers free quota of 100,000 requests a day; Supabase free projects pause after a week of inactivity and have no backups. Use **Download CSV** on the Orders tab if you want your own copy.
 
