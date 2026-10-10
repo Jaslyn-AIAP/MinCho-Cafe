@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en-SG">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>MinCho Cafe</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,700&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <!-- Chinese labels: only the characters actually used are downloaded (text= subset) -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700&display=swap&text=%E6%B8%AF%E5%BC%8F%E8%8C%B6%E8%87%AA%E5%AE%B6%E6%B2%96%E8%A3%BD%E5%B0%8F%E5%BA%97%E5%87%BA%E5%93%81%E6%9C%8B%E5%8F%8B%E9%99%90%E5%AE%9A%E5%A5%B6%E6%AA%B8%E5%8F%96%E8%B2%A8%E6%97%A5%E6%9C%9F%E9%81%B8%E6%93%87%E9%A3%B2%E6%96%B9%E4%BD%A0%E7%9A%84%E8%B3%87%E6%96%99%E4%BB%8A%E4%BE%9B%E6%87%89%E6%A8%BD%E8%A3%9D%E5%A4%9A%E8%AC%9D%E5%B7%B2%E6%94%B6%E5%88%B0%E8%A8%82%E5%96%AE%E7%B7%A8%E8%99%9F%E4%B8%8B%E4%B8%80%E6%AD%A5%E6%99%92%E5%BE%8C%E5%8F%B0">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/theme.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap masthead-row">
+      <a class="logo" href="/"><span class="logo-name">MinCho</span><span class="logo-cafe">Cafe</span><span class="logo-hk" lang="zh-Hant">港式茶</span></a>
+      <div class="theme-toggle" role="group" aria-label="Colour theme">
+        <button type="button" data-set-theme="light" aria-pressed="false" aria-label="Light mode" title="Light mode"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+        <button type="button" data-set-theme="dark" aria-pressed="false" aria-label="Dark mode" title="Dark mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="wrap strip-row">
+        <span class="strip-side" lang="zh-Hant">自家沖製</span>
+        <span class="mono">MinCho Cafe · Hand-brewed in Singapore</span>
+        <span class="strip-side" lang="zh-Hant">小店出品</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- ===================== STEP 1: invite code ===================== -->
+    <section id="gate" class="gate-grid">
+      <div class="hero">
+        <p class="eyebrow">Welcome to our tea shop</p>
+        <h1>Tea brewed slowly, for good friends.</h1>
+        <p class="lede">Hand-brewed Hong Kong milk tea and lemon tea by Ming Ming &amp; QQ.</p>
+        <div class="chips" lang="zh-Hant"><span>港式奶茶</span><span class="dot">·</span><span>港式檸茶</span></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><strong lang="zh-Hant">朋友限定</strong><span class="mono">Friends only</span></div>
+        <div class="card-body">
+          <p class="eyebrow">Entry card</p>
+          <h2>Come in for tea.</h2>
+          <form id="gate-form" class="stack" novalidate>
+            <div>
+              <label for="code">Invite code</label>
+              <input id="code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. TEA-XXXXXXXX" required>
+              <p class="hint">Ming Ming or QQ will have shared it in the WhatsApp group.</p>
+            </div>
+            <button type="submit" class="wide">See the menu <span aria-hidden="true">→</span></button>
+            <p id="gate-error" class="error" role="alert" hidden></p>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== STEP 2: order form ===================== -->
+    <form id="order-form" novalidate hidden>
+      <div class="hero">
+        <p class="eyebrow">Order form</p>
+        <h1>What can we brew for you?</h1>
+        <p class="lede">Choose your tea for the next collection. Everything is brewed in small batches by Ming Ming and QQ.</p>
+        <button id="change-code" type="button" class="link">Use a different code</button>
+      </div>
+      <p id="paused" class="notice" hidden>Ordering is paused right now. Please check back soon.</p>
+
+      <div class="order-grid">
+        <div class="sections">
+          <section class="panel">
+            <div class="step-head"><span class="step-num">01</span><div><small lang="zh-Hant">取貨日期</small><h2>Pick a date</h2></div></div>
+            <div id="dates" class="choices" role="radiogroup" aria-label="Collection date"></div>
+            <p id="no-dates" class="hint" hidden>No dates are open right now. Please check back soon.</p>
+          </section>
+
+          <section class="panel">
+            <div class="step-head"><span class="step-num">02</span><div><small lang="zh-Hant">選擇茶飲</small><h2>Choose your tea</h2></div></div>
+            <div class="board">
+              <div class="board-strip"><span lang="zh-Hant">今日供應</span><span class="mono">MinCho hand-brewed tea</span></div>
+              <div id="menu"></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="step-head"><span class="step-num">03</span><div><small lang="zh-Hant">取貨方式</small><h2>Collection</h2></div></div>
+            <div id="fulfilment" class="choices" role="radiogroup" aria-label="Collection or delivery"></div>
+            <div id="address-wrap" class="gap-top" hidden>
+              <label for="address">Delivery address</label>
+              <textarea id="address" autocomplete="street-address" maxlength="300" placeholder="Blk 123 Bishan Street 12, #05-67, Singapore 570123"></textarea>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="step-head"><span class="step-num">04</span><div><small lang="zh-Hant">你的資料</small><h2>Your details</h2></div></div>
+            <div class="stack">
+              <div class="two">
+                <div>
+                  <label for="name">Name</label>
+                  <input id="name" type="text" autocomplete="name" maxlength="80" required>
+                </div>
+                <div>
+                  <label for="phone">Mobile number</label>
+                  <input id="phone" type="tel" autocomplete="tel-national" inputmode="numeric" placeholder="9123 4567" required>
+                </div>
+              </div>
+              <div>
+                <label for="notes">Notes <span class="hint">(optional)</span></label>
+                <textarea id="notes" maxlength="500" placeholder="Less sweet, collection time, etc."></textarea>
+              </div>
+              <label class="consent">
+                <input id="consent" type="checkbox" required>
+                <span>I agree that MinCho Cafe may use my name and number (and address, for delivery) only to handle this order. Order records are deleted after a few months.</span>
+              </label>
+              <div id="turnstile"></div>
+              <p id="order-error" class="error" role="alert" hidden></p>
+            </div>
+          </section>
+        </div>
+
+        <aside class="totalbar" aria-label="Order total">
+          <div class="inner">
+            <div>
+              <div class="sub" id="total-sub">Nothing added yet</div>
+              <div class="amount" id="total">$0.00</div>
+            </div>
+            <div>
+              <button id="submit" type="submit" class="wide" disabled>Place order <span aria-hidden="true">→</span></button>
+              <p class="fineprint">No payment now. PayNow details come after placing the order.</p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </form>
+
+    <!-- ===================== STEP 3: order chit ===================== -->
+    <section id="done" hidden aria-live="polite">
+      <div class="receipt-wrap">
+        <div class="hero">
+          <p class="eyebrow">Order received · <span lang="zh-Hant">多謝</span></p>
+          <h1>We've got your order.</h1>
+          <p class="lede">One last thing: send your payment to QQ so we can confirm it.</p>
+        </div>
+        <article id="chit" class="chit"></article>
+        <button id="again" type="button" class="secondary back">← Place another order</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="/order.js" defer></script>
+</body>
+</html>

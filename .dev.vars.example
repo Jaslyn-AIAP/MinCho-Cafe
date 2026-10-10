@@ -1,0 +1,14 @@
+# Copy to .dev.vars for local testing with `npm run dev` (wrangler pages dev).
+# .dev.vars is git-ignored. NEVER commit real secrets.
+SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+SUPABASE_SERVICE_KEY=sb_secret_xxx
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx
+# Cloudflare's official always-pass test keys (local testing only)
+TURNSTILE_SITE_KEY=1x00000000000000000000AA
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+IP_HASH_SALT=any-long-random-string
+# Optional notifications
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+RESEND_API_KEY=
+NOTIFY_EMAIL=

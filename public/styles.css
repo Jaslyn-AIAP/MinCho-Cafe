@@ -1,0 +1,375 @@
+/* =============================================================================
+   MinCho Cafe — shared styles (order page + admin page)
+   Direction: "Bing Sutt, brightened" (chosen in Figma Make, Oct 2026).
+   An old Hong Kong ice room: sand walls, jade signage, vermilion buttons,
+   a grid-paper strip under the shop sign, and order chits on cream paper.
+
+   Layout: single column on phones with a fixed total bar at the bottom;
+   from 900px the order form becomes two columns with a sticky total card.
+
+   Two text colours on purpose:
+     --page-ink  text sitting directly on the page background
+     --ink       text on cream "paper" (cards, chits) — stays dark in dark mode,
+                 because the cards stay cream like real paper
+   ========================================================================== */
+:root {
+  --bg: #efe5ca;          /* sand wall */
+  --page-ink: #46301f;    /* milk-tea brown */
+  --page-muted: #6b5644;
+  --paper: #fffcf3;       /* cream card */
+  --paper-2: #fbf3dc;     /* inputs, chips */
+  --ink: #3f2b1d;
+  --muted: #6f5d4c;
+  --line: #d8c9a8;
+  --jade: #2c6a55;
+  --on-jade: #fffcf3;
+  --red: #c4452f;         /* vermilion */
+  --on-red: #fffcf3;
+  --lemon: #d3a42a;
+  --header: #fffcf3;
+  --header-ink: #22513f;
+  --strip: #fbf2d8;
+  --strip-line: #eadcb8;
+  --chit: #dde6dc;        /* pale sage carbon-copy paper */
+  --chit-ink: #2b4263;    /* carbon-copy navy */
+  --ok: #2c6a55;
+  --warn: #9a5a00;
+  --bad: #b23a26;
+  --shadow: #cfc3a3;
+
+  --font-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-hanzi: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #172d26; --page-ink: #f5e7c4; --page-muted: #cdbf9e;
+    --paper: #fef5dc; --paper-2: #fbecc6; --ink: #3f2b1d; --muted: #6f5d4c; --line: #d6c49c;
+    --jade: #2f6e58; --on-jade: #fffcf3; --red: #c04a33; --on-red: #fffcf3; --lemon: #d9ad35;
+    --header: #1c3a31; --header-ink: #f5e7c4; --strip: #21423a; --strip-line: #2d5348;
+    --chit: #dbe4da; --chit-ink: #2b4263; --shadow: #0f201b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #172d26; --page-ink: #f5e7c4; --page-muted: #cdbf9e;
+  --paper: #fef5dc; --paper-2: #fbecc6; --ink: #3f2b1d; --muted: #6f5d4c; --line: #d6c49c;
+  --jade: #2f6e58; --on-jade: #fffcf3; --red: #c04a33; --on-red: #fffcf3; --lemon: #d9ad35;
+  --header: #1c3a31; --header-ink: #f5e7c4; --strip: #21423a; --strip-line: #2d5348;
+  --chit: #dbe4da; --chit-ink: #2b4263; --shadow: #0f201b;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+/* Anything marked hidden stays hidden, even if a class gives it display:grid/flex.
+   (Without this, the invite card and the "paused" notice stayed visible.) */
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--page-ink);
+  font: 17px/1.55 var(--font-body);
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; }
+main.wrap { padding-block: 0 140px; }
+.mono { font-family: var(--font-mono); }
+[lang="zh-Hant"] { font-family: var(--font-hanzi); }
+.gap-top { margin-top: 24px; }
+.pre { white-space: pre-line; }
+:focus-visible { outline: 3px solid var(--lemon); outline-offset: 2px; }
+
+/* ---- Masthead: shop sign + grid-paper strip + vermilion rule --------------- */
+.masthead { background: var(--header); color: var(--header-ink); }
+.masthead-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 18px; }
+.logo { display: inline-flex; align-items: baseline; gap: 8px; color: inherit; text-decoration: none; }
+.logo-name { font-family: var(--font-display); font-weight: 700; font-size: 1.85rem; letter-spacing: -0.02em; line-height: 1; }
+.logo-cafe { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.2em; text-transform: uppercase; }
+.logo-hk { font-size: 0.9rem; font-weight: 700; margin-left: 4px; }
+.strip {
+  background-color: var(--strip);
+  background-image:
+    linear-gradient(var(--strip-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--strip-line) 1px, transparent 1px);
+  background-size: 12px 12px;
+  border-bottom: 3px solid var(--red);
+  color: var(--header-ink);
+  font-size: 0.78rem;
+}
+.strip-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-block: 7px; }
+.strip .mono { font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; }
+@media (max-width: 560px) { .strip-side { display: none; } .strip-row { justify-content: center; } }
+
+/* ---- Hero (one per step) ------------------------------------------------------ */
+.eyebrow { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--red); margin: 0 0 12px; }
+.hero { padding-block: clamp(32px, 7vw, 72px) 28px; }
+.hero h1 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(2.5rem, 7.5vw, 5.2rem);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  margin: 0;
+  max-width: 13ch;
+  text-wrap: balance;
+}
+.hero .lede { color: var(--page-muted); font-size: 1.12rem; max-width: 38ch; margin: 18px 0 0; }
+.chips { display: inline-flex; gap: 10px; align-items: center; margin-top: 24px; padding: 8px 14px; border: 1px solid var(--jade); background: var(--paper); color: var(--ink); font-weight: 700; }
+.chips .dot { color: var(--lemon); }
+
+/* ---- Gate (invite) layout ---------------------------------------------------- */
+.gate-grid { display: grid; gap: 28px; align-items: start; }
+@media (min-width: 900px) { .gate-grid { grid-template-columns: 1.3fr 1fr; gap: 64px; } .gate-grid .card { margin-top: clamp(32px, 7vw, 72px); } }
+
+/* ---- Cards ------------------------------------------------------------------------- */
+.card, .panel {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  box-shadow: 8px 8px 0 var(--shadow);
+}
+.card { border: 2px solid var(--jade); }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--jade); color: var(--on-jade); padding: 12px 18px; }
+.card-head strong { font-family: var(--font-hanzi); font-size: 1.15rem; }
+.card-head .mono { font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; }
+.card-body { padding: 26px 24px 28px; }
+.card-body h2 { font-family: var(--font-display); font-weight: 500; font-size: 2rem; letter-spacing: -0.02em; margin: 0 0 20px; text-transform: none; }
+.panel { padding: 22px 20px; margin-top: 18px; }
+
+/* Numbered form sections: 01 Pick a date, 02 Choose your tea … (a real sequence) */
+.step-head { display: flex; align-items: center; gap: 14px; padding-bottom: 16px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.step-num { display: grid; place-items: center; width: 46px; height: 46px; flex: none; border: 2px solid var(--red); color: var(--red); font-family: var(--font-mono); font-size: 0.95rem; }
+.step-head small { display: block; color: var(--red); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; }
+.step-head h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.75rem; letter-spacing: -0.02em; line-height: 1.1; margin: 0; text-transform: none; }
+
+/* Plain headings inside admin panels */
+.panel > h2, .panel h2.gap-top, #login h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.6rem; letter-spacing: -0.02em; margin: 0 0 14px; }
+.panel h2.gap-top { margin-top: 24px; }
+
+.hint { color: var(--muted); font-size: 0.92rem; margin: 6px 0 0; }
+.stack { display: grid; gap: 14px; }
+
+/* ---- Form controls --------------------------------------------------------------- */
+label { font-weight: 700; font-size: 0.95rem; }
+input[type="text"], input[type="tel"], input[type="email"], input[type="password"],
+input[type="number"], input[type="date"], input[type="time"], textarea, select {
+  width: 100%;
+  font: inherit;
+  font-weight: 400;
+  color: var(--ink);
+  background: var(--paper-2);
+  border: 2px solid var(--jade);
+  border-radius: 0;
+  padding: 11px 14px;
+  margin-top: 6px;
+}
+input::placeholder, textarea::placeholder { color: #9b8b72; font-family: var(--font-mono); font-size: 0.92em; }
+textarea { min-height: 84px; resize: vertical; }
+
+button, .btn {
+  font: inherit;
+  font-weight: 700;
+  border: 0;
+  border-radius: 0;
+  padding: 14px 18px;
+  cursor: pointer;
+  background: var(--red);
+  color: var(--on-red);
+}
+button.wide { width: 100%; display: flex; justify-content: space-between; align-items: center; font-size: 1.08rem; }
+button.secondary { background: transparent; color: var(--ink); border: 2px solid var(--jade); }
+button.small { padding: 6px 12px; font-size: 0.85rem; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ---- Choice cards (dates, collection) --------------------------------------------- */
+.choices { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.choice { position: relative; display: block; }
+.choice > input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.choice-face {
+  display: flex; align-items: center; gap: 14px;
+  border: 2px solid var(--line);
+  border-left-width: 6px;
+  background: var(--paper);
+  padding: 14px;
+  height: 100%;
+}
+.choice > input:checked + .choice-face { border-color: var(--jade); border-left-color: var(--lemon); background: var(--paper-2); }
+.choice > input:focus-visible + .choice-face { outline: 3px solid var(--lemon); outline-offset: 2px; }
+.radio { width: 20px; height: 20px; flex: none; border: 2px solid var(--jade); border-radius: 50%; display: grid; place-items: center; }
+.choice > input:checked + .choice-face .radio::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--red); }
+.datebox { display: grid; place-items: center; flex: none; width: 56px; height: 56px; background: var(--red); color: var(--on-red); line-height: 1; }
+.datebox b { font-family: var(--font-display); font-weight: 500; font-size: 1.7rem; }
+.datebox span { font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.choice-text { flex: 1; min-width: 0; }
+.choice-text strong { display: block; font-size: 1.05rem; }
+.choice-text small { display: block; color: var(--muted); font-size: 0.84rem; line-height: 1.35; }
+.choice-price { font-family: var(--font-mono); font-size: 0.85rem; align-self: flex-start; flex: none; max-width: 8.5em; text-align: right; }
+
+/* ---- Menu board ---------------------------------------------------------------- */
+.board { border: 6px solid var(--jade); background: var(--paper); }
+.board-strip { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--jade); color: var(--lemon); padding: 6px 12px; font-size: 0.72rem; }
+.board-strip .mono { letter-spacing: 0.16em; text-transform: uppercase; }
+.drink { padding: 18px 16px 8px; }
+.drink + .drink { border-top: 10px solid var(--red); }
+.drink-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.drink-zh { display: block; color: var(--red); font-size: 0.8rem; font-weight: 700; }
+.drink-name { font-family: var(--font-display); font-weight: 500; font-size: 1.6rem; letter-spacing: -0.02em; line-height: 1.1; }
+.drink-name.milk_tea { color: var(--ink); }
+.drink-name.lemon_tea { color: #a7740a; }
+.drink .hint { margin: 2px 0 0; }
+.per-litre { flex: none; text-align: right; background: var(--paper-2); border: 1px solid var(--line); padding: 4px 10px; }
+.per-litre small { display: block; font-size: 0.66rem; color: var(--muted); }
+.per-litre b { font-family: var(--font-mono); font-weight: 500; }
+.size-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.size-row > span:first-child { font-weight: 700; font-size: 0.95rem; }
+.price { font-family: var(--font-mono); font-size: 0.9rem; background: var(--paper-2); border: 1px solid var(--line); padding: 4px 8px; min-width: 5.2em; text-align: right; font-variant-numeric: tabular-nums; }
+.stepper { display: inline-flex; align-items: stretch; border: 2px solid var(--jade); }
+.stepper button { background: var(--paper); color: var(--jade); padding: 4px 13px; font-size: 1.15rem; line-height: 1; }
+.stepper output { min-width: 2.4em; display: grid; place-items: center; font-family: var(--font-mono); font-weight: 600; border-inline: 1px solid var(--line); background: var(--paper); }
+
+/* Details grid: name + mobile side by side when there is room */
+.two { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.consent { display: flex; gap: 12px; align-items: flex-start; font-weight: 400; font-size: 0.92rem; color: var(--muted); }
+.consent input { width: 20px; height: 20px; margin-top: 2px; flex: none; accent-color: var(--jade); }
+
+/* ---- Order layout + total ---------------------------------------------------------- */
+.order-grid { display: grid; gap: 0; align-items: start; }
+.order-grid > .sections > .panel:first-child { margin-top: 0; }
+.totalbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  background: var(--paper); color: var(--ink);
+  border-top: 2px solid var(--jade);
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+}
+.totalbar .inner { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.totalbar .sub { color: var(--muted); font-size: 0.86rem; }
+.totalbar .amount { font-family: var(--font-mono); font-weight: 600; font-size: 1.7rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.totalbar .fineprint { display: none; color: var(--muted); font-size: 0.8rem; margin: 10px 0 0; }
+@media (min-width: 900px) {
+  .order-grid { grid-template-columns: minmax(0, 1fr) 320px; gap: 36px; }
+  .totalbar { position: sticky; top: 24px; left: auto; right: auto; bottom: auto; border: 2px solid var(--jade); box-shadow: 8px 8px 0 var(--shadow); padding: 20px; }
+  .totalbar .inner { display: grid; gap: 14px; }
+  .totalbar .amount { font-size: 2.2rem; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .totalbar .fineprint { display: block; }
+  main.wrap { padding-block-end: 64px; }
+}
+
+/* ---- Messages ---------------------------------------------------------------------- */
+.error { color: var(--bad); font-weight: 700; margin: 8px 0 0; }
+.notice { display: flex; gap: 10px; border: 1px solid var(--red); background: #f4ddd4; color: #7d2717; padding: 10px 14px; font-weight: 600; font-size: 0.92rem; }
+
+/* ---- Receipt: carbon-copy order chit ------------------------------------------ */
+.receipt-wrap { max-width: 760px; margin: 0 auto; }
+.chit {
+  position: relative;
+  background: var(--chit);
+  color: var(--chit-ink);
+  padding: 30px clamp(20px, 5vw, 44px) 26px;
+  box-shadow: 10px 10px 0 var(--lemon);
+  /* perforated binding holes down both edges */
+  background-image:
+    radial-gradient(circle at 0 10px, var(--bg) 4px, transparent 4.5px),
+    radial-gradient(circle at 100% 10px, var(--bg) 4px, transparent 4.5px);
+  background-size: 100% 20px;
+  background-repeat: repeat-y;
+}
+.chit-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 18px; border-bottom: 2px solid var(--chit-ink); }
+.chit .logo-name { font-size: 1.6rem; }
+.stamp { border: 2px solid var(--red); outline: 1px solid var(--red); outline-offset: 3px; color: var(--red); padding: 6px 10px; text-align: center; transform: rotate(-6deg); line-height: 1.1; }
+.stamp b { display: block; font-family: var(--font-hanzi); font-size: 1.15rem; }
+.stamp small { font-family: var(--font-mono); font-size: 0.55rem; letter-spacing: 0.14em; }
+.chit-label { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; margin: 22px 0 4px; }
+.ref { font-family: var(--font-mono); font-size: clamp(2rem, 8vw, 3rem); font-weight: 500; letter-spacing: 0.02em; line-height: 1.1; }
+.chit table { width: 100%; border-collapse: collapse; margin-top: 18px; border-top: 1px dashed var(--chit-ink); font-variant-numeric: tabular-nums; }
+.chit th { font-family: var(--font-mono); font-weight: 400; font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; text-align: left; padding: 14px 0 8px; border-bottom: 1px solid #9fb0a4; }
+.chit th:last-child, .chit td:last-child { text-align: right; }
+.chit td { padding: 12px 0; border-bottom: 1px solid #b8c6bb; vertical-align: top; }
+.chit td b { display: block; }
+.chit td small { font-family: var(--font-mono); font-size: 0.78rem; }
+.chit td.amt { font-family: var(--font-mono); }
+.chit tfoot td { border-bottom: 1px dashed var(--chit-ink); font-family: var(--font-display); font-size: 1.3rem; }
+.chit tfoot td.amt { font-family: var(--font-mono); font-size: 1.4rem; font-weight: 600; }
+.chit h3 { font-family: var(--font-display); font-weight: 500; font-size: 1.6rem; margin: 2px 0 12px; }
+.paylines { border: 1px solid #9fb0a4; }
+.copyline { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; }
+.paylines .copyline + .copyline { border-top: 1px solid #9fb0a4; }
+.copyline small { display: block; font-size: 0.72rem; }
+.copyline code { font-family: var(--font-mono); font-size: 1.05rem; user-select: all; }
+.chit button.secondary { border-color: var(--chit-ink); color: var(--chit-ink); }
+.chit .notice { margin-top: 14px; }
+.chit .hint { color: var(--chit-ink); opacity: 0.85; }
+.chit-foot { margin-top: 18px; padding-top: 12px; border-top: 1px dashed var(--chit-ink); text-align: center; font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; }
+
+/* ---- Admin ------------------------------------------------------------------------- */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 16px; }
+.tabs button { background: var(--paper); color: var(--ink); border: 2px solid var(--jade); padding: 8px 14px; }
+.tabs button[aria-selected="true"] { background: var(--jade); color: var(--on-jade); }
+.table-wrap { overflow-x: auto; }
+table.grid { width: 100%; border-collapse: collapse; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+table.grid th, table.grid td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.grid th { font-family: var(--font-mono); font-weight: 400; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.pill { display: inline-block; padding: 1px 8px; font-size: 0.78rem; font-weight: 700; border: 1px solid currentColor; }
+.pill.awaiting_payment { color: var(--warn); }
+.pill.paid { color: var(--ok); }
+.pill.collected { color: var(--muted); }
+.pill.cancelled { color: var(--bad); }
+.tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.tile { border: 1px solid var(--line); padding: 12px; background: var(--paper-2); }
+.tile .big { font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+/* Label + input pairs side by side: labels may wrap to different heights,
+   so push each input to the bottom of its column to keep the boxes level. */
+.row > div { flex: 1 1 160px; min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: flex-end; }
+.between { justify-content: space-between; margin-top: 16px; color: var(--page-ink); }
+.between .hint { color: var(--page-muted); }
+.between button.secondary { color: var(--page-ink); }
+.switch { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+.switch input { width: 20px; height: 20px; accent-color: var(--jade); }
+.w-200 { max-width: 200px; }
+.w-240 { max-width: 240px; }
+.break { font-size: 0.9rem; word-break: break-all; }
+#login { max-width: 460px; margin-inline: auto; margin-top: 40px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+/* Navigation back */
+button.link { background: none; border: 0; padding: 0; margin-top: 14px; color: var(--page-ink); text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
+button.back { margin-top: 28px; color: var(--page-ink); border-color: var(--page-ink); }
+/* Light / dark switch in the masthead */
+.theme-toggle { display: inline-flex; border: 2px solid var(--jade); }
+.theme-toggle button { background: transparent; color: var(--header-ink); padding: 8px 12px; line-height: 0; }
+.theme-toggle button[aria-pressed="true"] { background: var(--jade); color: var(--on-jade); }
+.theme-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Customer mobile number on the owners' page: tap to WhatsApp */
+a.wa { color: var(--jade); font-size: 0.9rem; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+/* On phones the total bar is fixed to the bottom. Keep anything the browser
+   scrolls to (a tapped field, an error message) clear of that bar. */
+@media (max-width: 899px) { html { scroll-padding-bottom: 120px; } }
+/* Bottle rows: size label on one line ("250 ml"); tighter spacing on small phones */
+.size-name { white-space: nowrap; }
+@media (max-width: 420px) {
+  .panel { padding: 18px 14px; }
+  .drink { padding-inline: 10px; }
+  .size-row { gap: 8px; }
+  .price { min-width: 4.4em; padding-inline: 6px; }
+  .stepper button { padding: 4px 10px; }
+  .stepper output { min-width: 2em; }
+}
+
+/* Size label: "250 ml" with "packet"/"bottle" underneath */
+.size-name b { display: block; }
+.size-name small { display: block; font-weight: 400; font-size: 0.8rem; color: var(--muted); }
+
+.nowrap { white-space: nowrap; }
+
+/* Owners' order list on phones: each order becomes a stacked card
+   (ref + total on top, then customer, items and a full-width status). */
+@media (max-width: 640px) {
+  #orders-table thead { display: none; }
+  #orders-table, #orders-table tbody { display: block; }
+  #orders-table tr { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  #orders-table td { border: 0; padding: 0; }
+  #orders-table td:nth-child(4) { grid-column: 2; grid-row: 1; text-align: right; font-weight: 700; font-family: var(--font-mono); }
+  #orders-table td:nth-child(2), #orders-table td:nth-child(3), #orders-table td:nth-child(5) { grid-column: 1 / -1; }
+  #orders-table td:nth-child(5) select { width: 100%; margin-top: 2px; }
+}
