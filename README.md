@@ -63,7 +63,7 @@ For now Jaslyn owns all three accounts (agreed with the owners while the custome
 
 ## 4. Turnstile setup
 
-**Cloudflare dashboard → Turnstile → Add widget** → name `MinCho Cafe`, hostname `minchocafe.pages.dev` (your real Pages hostname), mode **Managed** → Create. Copy the **Site key** and **Secret key**.
+**Cloudflare dashboard → Turnstile → Add widget** → name `MinCho Cafe`, hostname `mincho-cafe.pages.dev` (your real Pages hostname), mode **Managed** → Create. Copy the **Site key** and **Secret key**.
 
 ## 5. Cloudflare Pages setup
 
@@ -87,7 +87,7 @@ For now Jaslyn owns all three accounts (agreed with the owners while the custome
    | `SETUP_CODE` | **Secret** | A long random string you keep. Needed once, to create the first owner (step 6) |
 
 5. **Deployments → Retry deployment** (variables only apply to new deployments).
-6. The project name sets the address: `minchocafe` → `https://minchocafe.pages.dev`. If the name is taken, Cloudflare adds a suffix; update the Turnstile hostname to match.
+6. The project name sets the address: `mincho-cafe` → `https://mincho-cafe.pages.dev`. If the name is taken, Cloudflare adds a suffix; update the Turnstile hostname to match.
 
 ## 6. First login and go-live checklist
 

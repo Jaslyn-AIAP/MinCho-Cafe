@@ -37,6 +37,25 @@
   // Helpers
   // ---------------------------------------------------------------------------
   /** Show a Supabase error in a status element (or the console). */
+  /** Show a status line in a message element: kind 'ok' (green, ✓, with time) or 'bad' (red, ✗, with time). */
+  function say(el, text, kind) {
+    el.classList.remove('status-ok', 'status-bad');
+    if (kind) el.classList.add(kind === 'ok' ? 'status-ok' : 'status-bad');
+    const time = new Date().toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' });
+    // Failures get a cross and capitalised wording, so they don't rely on colour alone
+    el.textContent = kind === 'ok' ? `✓ ${text} at ${time}` : kind === 'bad' ? `✗ ${text} (${time})` : text;
+  }
+
+  /** Turn a Supabase sign-in error into a plain message. */
+  function loginMessage(error) {
+    const m = String(error?.message || '');
+    if (/invalid login credentials/i.test(m)) return 'Wrong email or password.';
+    if (error?.status === 429 || /rate limit|too many/i.test(m)) return 'Too many tries. Wait a few minutes, then try again.';
+    if (/email not confirmed/i.test(m)) return 'This email has not been confirmed. Ask another owner to re-add you.';
+    if (/fetch|network/i.test(m)) return 'Could not reach the login service. Check your connection and try again.';
+    return `Could not log in: ${m || 'unknown error'}`;
+  }
+
   function report(error, target) {
     console.error(error);
     const msg = error?.message || String(error);
@@ -122,7 +141,7 @@
     const box = $('login-error');
     box.hidden = true;
     const { data, error } = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value });
-    if (error) { box.textContent = 'Wrong email or password.'; box.hidden = false; return; }
+    if (error) { console.error(error); box.textContent = loginMessage(error); box.hidden = false; return; }
     await enter(data.session);
   });
 
@@ -433,7 +452,8 @@
     const msg = $('settings-msg');
     const toCents = (v) => Math.max(0, Math.round(Number(v || 0) * 100));
     const paynow = $('s-paynow').value.replace(/\s/g, '');
-    if (!/^[89]\d{7}$/.test(paynow)) { msg.textContent = 'PayNow number must be an 8-digit Singapore mobile number (starts with 8 or 9).'; return; }
+    if (!/^[89]\d{7}$/.test(paynow)) { say(msg, 'FAILED TO SAVE. PayNow number must be an 8-digit Singapore mobile number (starts with 8 or 9).', 'bad'); return; }
+    say(msg, 'Saving…');
     const update = {
       ordering_open: $('s-open').checked,
       delivery_enabled: $('s-delivery').checked,
@@ -448,10 +468,10 @@
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await sb.from('settings').update(update).eq('id', 1).select().single();
-    if (error) { report(error, msg); return; }
+    if (error) { say(msg, `FAILED TO SAVE. ${report(error)}`, 'bad'); return; }
     settings = data;
     renderSettings();
-    msg.textContent = 'Saved';
+    say(msg, data.ordering_open ? 'Saved. Ordering is OPEN' : 'Saved. Ordering is CLOSED', 'ok');
   });
 
   $('copy-code').addEventListener('click', (e) => copy(settings.invite_code, e.currentTarget));
@@ -464,9 +484,10 @@
     const bytes = crypto.getRandomValues(new Uint8Array(8));
     const code = 'TEA-' + [...bytes].map((b) => alphabet[b % alphabet.length]).join('');
     const { data, error } = await sb.from('settings').update({ invite_code: code, updated_at: new Date().toISOString() }).eq('id', 1).select().single();
-    if (error) return report(error, $('settings-msg'));
+    if (error) return say($('settings-msg'), `FAILED TO MAKE NEW CODE. The old code still works. ${report(error)}`, 'bad');
     settings = data;
     renderSettings();
+    say($('settings-msg'), 'New invite code made. The old code and link no longer work', 'ok');
   });
 
   confirmTap($('purge'), 'Delete orders older than this', async () => {

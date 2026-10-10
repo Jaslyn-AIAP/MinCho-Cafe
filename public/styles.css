@@ -257,6 +257,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ---- Messages ---------------------------------------------------------------------- */
 .error { color: var(--bad); font-weight: 700; margin: 8px 0 0; }
+.status-ok, .status-bad { font-weight: 700; font-size: 1rem; padding: 8px 12px; border-left: 4px solid; }
+.status-ok { color: var(--ok); border-color: var(--ok); background: var(--paper-2); }
+.status-bad { color: var(--bad); border-color: var(--bad); background: var(--paper-2); }
 .notice { display: flex; gap: 10px; border: 1px solid var(--red); background: #f4ddd4; color: #7d2717; padding: 10px 14px; font-weight: 600; font-size: 0.92rem; }
 
 /* ---- Receipt: carbon-copy order chit ------------------------------------------ */

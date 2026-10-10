@@ -4,7 +4,7 @@ compatibility_date = "2026-10-01"
 
 [vars]
 # Change to your real Pages address after the first deploy
-SITE_URL = "https://minchocafe.pages.dev"
+SITE_URL = "https://mincho-cafe.pages.dev"
 
 [triggers]
 # Every day at 02:17 UTC (10:17 am Singapore time)
