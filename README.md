@@ -133,8 +133,8 @@ Set up in the Cloudflare dashboard (no install needed):
 1. **Workers & Pages → Create → Start with Hello World!** Name it `mincho-keepalive`, **Deploy**.
 2. **Edit code**: replace everything with `keepalive-worker/worker.js`, **Deploy**.
 3. **Settings → Variables and Secrets → Add**: Text, `SITE_URL` = `https://mincho-cafe.pages.dev`, **Deploy**.
-4. **Settings → Trigger events → Add → Cron Triggers**: `17 0 * * 1,4`, **Add**.
-5. Check the worker's logs after the next run: `keepalive 200 {"ok":true}`.
+4. **Settings → Trigger events → Add → Cron Triggers**: `17 0 * * MON,THU`, **Add**.
+5. Test any time by opening the worker's own address (`https://mincho-keepalive.<your-subdomain>.workers.dev/`): it runs the same check and shows `Result: 200 {"ok":true}`. Scheduled runs log `keepalive 200 {"ok":true}`.
 
 (Alternative with Node.js installed: `cd keepalive-worker`, `npx wrangler login`, `npx wrangler deploy`.)
 

@@ -7,6 +7,8 @@ compatibility_date = "2026-10-01"
 SITE_URL = "https://mincho-cafe.pages.dev"
 
 [triggers]
-# Twice a week: Monday and Thursday 00:17 UTC = 08:17 Singapore time (gaps of 3 and 4 days,
+# Twice a week: Monday and Thursday 00:17 UTC = 08:17 Singapore time. Day NAMES on purpose:
+# Cloudflare numbers weekdays from 1 = Sunday, so "1,4" would mean Sunday and Wednesday.
+# (Gaps of 3 and 4 days,
 # inside Supabase's 7-day pause window, with room for one failed ping)
-crons = ["17 0 * * 1,4"]
+crons = ["17 0 * * MON,THU"]
