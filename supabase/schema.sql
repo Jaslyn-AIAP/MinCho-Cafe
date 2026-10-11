@@ -120,14 +120,17 @@ create table public.orders (
   total_cents        int not null check (total_cents >= 0),
   status             text not null default 'active'
                      constraint orders_status_check check (status in ('active', 'cancelled')),
-  -- Payment: unpaid -> screenshot (customer says paid) -> confirmed (seen in the bank).
+  -- Payment: unpaid -> screenshot (customer says paid) -> confirmed (seen in the bank)
+  -- -> refunded (only after cancelling).
   -- Collection is separate. Who/when are filled in by orders_guard_and_stamp().
   payment_status     text not null default 'unpaid'
-                     constraint orders_payment_status_check check (payment_status in ('unpaid', 'screenshot', 'confirmed')),
+                     constraint orders_payment_status_check check (payment_status in ('unpaid', 'screenshot', 'confirmed', 'refunded')),
   screenshot_at      timestamptz,
   screenshot_by      text,
   confirmed_at       timestamptz,
   confirmed_by       text,
+  refunded_at        timestamptz,                        -- money returned (cancelled after paying)
+  refunded_by        text,
   collected_at       timestamptz,
   collected_by       text,
   cancelled_at       timestamptz,
@@ -165,17 +168,25 @@ begin
   select coalesce(a.display_name, a.email), a.can_confirm_payments into who, may_confirm
     from public.admins a where a.user_id = auth.uid();
 
-  -- Only the PayNow account holder may confirm, or undo a confirmation
+  -- Only the PayNow account holder may confirm or refund, or undo either:
+  -- both are about money in (or leaving) her bank account
   if new.payment_status is distinct from old.payment_status
-     and 'confirmed' in (new.payment_status, old.payment_status)
+     and (new.payment_status in ('confirmed', 'refunded') or old.payment_status in ('confirmed', 'refunded'))
      and not coalesce(may_confirm, false) then
-    raise exception 'Only the owner who receives the PayNow money can confirm payments.'
+    raise exception 'Only the owner who receives the PayNow money can confirm or refund payments.'
       using errcode = '42501';
+  end if;
+
+  -- A refund only makes sense for money confirmed in the bank
+  if new.payment_status = 'refunded' and old.payment_status not in ('confirmed', 'refunded') then
+    raise exception 'Only a payment confirmed in the bank can be marked refunded. Confirm it first.'
+      using errcode = '22023';
   end if;
 
   -- Who/when are never taken from the browser: start from the stored values...
   new.screenshot_at := old.screenshot_at;  new.screenshot_by := old.screenshot_by;
   new.confirmed_at  := old.confirmed_at;   new.confirmed_by  := old.confirmed_by;
+  new.refunded_at   := old.refunded_at;    new.refunded_by   := old.refunded_by;
   new.cancelled_at  := old.cancelled_at;   new.cancelled_by  := old.cancelled_by;
 
   -- ...then record the step that just happened
@@ -183,11 +194,17 @@ begin
     if new.payment_status = 'unpaid' then
       new.screenshot_at := null; new.screenshot_by := null;
       new.confirmed_at  := null; new.confirmed_by  := null;
+      new.refunded_at   := null; new.refunded_by   := null;
     elsif new.payment_status = 'screenshot' then
       new.confirmed_at := null; new.confirmed_by := null;
+      new.refunded_at  := null; new.refunded_by  := null;
       if old.payment_status = 'unpaid' then new.screenshot_at := now(); new.screenshot_by := who; end if;
-    else -- confirmed
-      new.confirmed_at := now(); new.confirmed_by := who;
+    elsif new.payment_status = 'confirmed' then
+      new.refunded_at := null; new.refunded_by := null;
+      -- undoing a refund keeps the original confirmation record
+      if old.payment_status <> 'refunded' then new.confirmed_at := now(); new.confirmed_by := who; end if;
+    else -- refunded
+      new.refunded_at := now(); new.refunded_by := who;
     end if;
   end if;
 

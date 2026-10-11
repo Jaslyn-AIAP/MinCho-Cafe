@@ -77,6 +77,8 @@
         <h2>Orders</h2>
         <!-- Screenshots not yet confirmed in the bank, across all dates (filled by admin.js) -->
         <div id="unconfirmed" class="status-warn unconfirmed" role="status" hidden></div>
+        <!-- Cancelled orders whose payment was confirmed: refunds to make (filled by admin.js) -->
+        <div id="refunds" class="status-bad unconfirmed" role="status" hidden></div>
         <div class="row">
           <select id="order-date" aria-label="Delivery date" class="w-240"></select>
           <button id="refresh" type="button" class="small secondary">Refresh</button>

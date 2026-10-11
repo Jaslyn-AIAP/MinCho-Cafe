@@ -41,6 +41,7 @@
     ['unpaid', 'Not paid'],
     ['screenshot', 'Screenshot received'],
     ['confirmed', 'Confirmed in bank'],
+    ['refunded', 'Refunded'],          // only for cancelled orders (migration 006)
   ];
   const paymentLabel = (v) => (PAYMENT.find(([value]) => value === v) || [v, v])[1];
   let me = { email: '', can_confirm_payments: false };   // the logged-in owner
@@ -382,6 +383,7 @@
     const shotOnly = sum(live.filter((o) => o.payment_status === 'screenshot'));
     const unpaid = total - confirmed - shotOnly;
     const handedUnconfirmed = live.filter((o) => o.collected_at && o.payment_status !== 'confirmed');
+    const refundsOwed = currentOrders.filter((o) => o.status === 'cancelled' && o.payment_status === 'confirmed');
     brew.append(el('div', { className: 'tile' },
       el('div', { className: 'hint', textContent: plural(live.length, 'order') }),
       el('div', { className: 'big', textContent: money(total) }),
@@ -391,6 +393,9 @@
         `${money(unpaid)} not paid`),
       handedUnconfirmed.length
         ? el('div', { className: 'hint still owed', textContent: `⚠ ${money(sum(handedUnconfirmed))} handed over but not confirmed in bank (${plural(handedUnconfirmed.length, 'order')})` })
+        : '',
+      refundsOwed.length
+        ? el('div', { className: 'hint still owed', textContent: `✗ Refunds owed: ${money(sum(refundsOwed))} (${plural(refundsOwed.length, 'cancelled order')})` })
         : ''));
 
     // --- Order table --------------------------------------------------------------
@@ -430,7 +435,15 @@
 
   /** Coloured labels next to the order reference. */
   function orderBadges(o) {
-    if (o.status === 'cancelled') return [el('span', { className: 'pill cancelled', textContent: 'Cancelled' })];
+    if (o.status === 'cancelled') {
+      // A cancelled order may still have money attached: make that impossible to miss
+      const extra = {
+        screenshot: el('span', { className: 'pill awaiting', textContent: 'Check payment, refund if received' }),
+        confirmed: el('span', { className: 'pill danger', textContent: 'Refund needed' }),
+        refunded: el('span', { className: 'pill collected', textContent: 'Refunded' }),
+      }[o.payment_status];
+      return [el('span', { className: 'pill cancelled', textContent: 'Cancelled' }), ...(extra ? [' ', extra] : [])];
+    }
     const pay = { unpaid: ['awaiting', 'Not paid'], screenshot: ['awaiting', 'Screenshot only'], confirmed: ['paid', 'Confirmed'] }[o.payment_status] || ['awaiting', o.payment_status];
     const out = [el('span', { className: `pill ${pay[0]}`, textContent: pay[1] })];
     if (o.collected_at) {
@@ -441,14 +454,16 @@
     return out;
   }
 
+
   /** Payment dropdown, Collected tick box, Cancel/Restore, and the who/when record. */
   function orderControls(o) {
     const msg = $('orders-msg');
     const save = async (change, okText) => {
       const { error } = await sb.from('orders').update(change).eq('id', o.id);
       if (error) {
-        // 42501 = the database refused a confirmation by an owner without the right
-        const text = error.code === '42501' ? 'Only the owner who receives the PayNow money can confirm payments.' : report(error);
+        // 42501 = no right to confirm/refund; 22023 = refund before confirming. The database's
+        // own message explains it; anything else gets the general error text.
+        const text = ['42501', '22023'].includes(error.code) ? error.message : report(error);
         say(msg, `FAILED TO SAVE. ${o.order_ref} is unchanged. ${text}`, 'bad');
         renderOrders();
         return false;
@@ -458,23 +473,29 @@
       return true;
     };
     const name = `${o.order_ref} (${o.customer_name})`;
+    const cancelled = o.status === 'cancelled';
 
-    if (o.status === 'cancelled') {
-      const restore = el('button', { type: 'button', className: 'small secondary', textContent: 'Restore order' });
-      confirmTap(restore, 'Restore order', () => save({ status: 'active' }, `${name} restored.`));
-      return [restore, auditLine(o)];
-    }
-
-    // Payment: the "Confirmed in bank" option is greyed out for owners without the right.
-    // If the order is already confirmed, they can't change it at all (the database would refuse).
-    const lockedConfirmed = o.payment_status === 'confirmed' && !me.can_confirm_payments;
-    const payment = el('select', { ariaLabel: `Payment for ${o.order_ref}`, disabled: lockedConfirmed },
-      ...PAYMENT.map(([v, label]) => el('option', {
+    // Payment dropdown. Confirmed and Refunded are money in/out of QQ's account, so only
+    // she can set or undo them (the database enforces this; here they're just greyed out).
+    // Refunded is offered only on cancelled orders, and only once confirmed in the bank.
+    const qqOnly = ['confirmed', 'refunded'];
+    const locked = qqOnly.includes(o.payment_status) && !me.can_confirm_payments;
+    const options = PAYMENT.filter(([v]) => v !== 'refunded' || cancelled || o.payment_status === 'refunded');
+    const payment = el('select', { ariaLabel: `Payment for ${o.order_ref}`, disabled: locked },
+      ...options.map(([v, label]) => el('option', {
         value: v, selected: o.payment_status === v,
-        disabled: v === 'confirmed' && !me.can_confirm_payments && o.payment_status !== 'confirmed',
-        textContent: v === 'confirmed' && !me.can_confirm_payments ? `${label} (QQ only)` : label,
+        disabled: v !== o.payment_status && (
+          (qqOnly.includes(v) && !me.can_confirm_payments)
+          || (v === 'refunded' && o.payment_status !== 'confirmed')),
+        textContent: qqOnly.includes(v) && !me.can_confirm_payments ? `${label} (QQ only)` : label,
       })));
     payment.addEventListener('change', () => save({ payment_status: payment.value }, `${name}: payment set to "${paymentLabel(payment.value)}".`));
+
+    if (cancelled) {
+      const restore = el('button', { type: 'button', className: 'small secondary', textContent: 'Restore order' });
+      confirmTap(restore, 'Restore order', () => save({ status: 'active' }, `${name} restored.`));
+      return [payment, el('div', { className: 'row order-actions' }, restore), auditLine(o)];
+    }
 
     // Collected: handing over before the money is confirmed is where sellers lose money
     const collected = el('input', { type: 'checkbox', checked: Boolean(o.collected_at), ariaLabel: `Collected ${o.order_ref}` });
@@ -488,8 +509,15 @@
         collected.checked ? `${name} marked collected.` : `${name} marked NOT collected.`);
     });
 
+    // Cancel: if money may already have been paid, say so before cancelling
     const cancel = el('button', { type: 'button', className: 'small secondary', textContent: 'Cancel order' });
-    confirmTap(cancel, 'Cancel order', () => save({ status: 'cancelled' }, `${name} cancelled.`));
+    confirmTap(cancel, 'Cancel order', async () => {
+      if (o.payment_status !== 'unpaid') {
+        const sure = window.confirm(`${name}\n\nThis order has a payment recorded (${paymentLabel(o.payment_status)}).\nQQ will need to check her bank and refund the customer.\n\nCancel anyway?`);
+        if (!sure) return;
+      }
+      await save({ status: 'cancelled' }, o.payment_status === 'unpaid' ? `${name} cancelled.` : `${name} cancelled. Payment recorded: QQ to check and refund.`);
+    });
 
     return [
       payment,
@@ -500,49 +528,82 @@
     ];
   }
 
+
   /** "Screenshot: Ming 2026-10-11T20:22:10+08:00 · Confirmed: QQ 2026-10-11T21:00:42+08:00 · …" */
   function auditLine(o) {
-    const parts = [];
-    if (o.screenshot_by) parts.push(`Screenshot: ${shortWho(o.screenshot_by)} ${when(o.screenshot_at)}`.trim());
-    if (o.confirmed_by) parts.push(`Confirmed: ${shortWho(o.confirmed_by)} ${when(o.confirmed_at)}`.trim());
-    if (o.collected_by) parts.push(`Collected: ${shortWho(o.collected_by)} ${when(o.collected_at)}`.trim());
-    if (o.cancelled_by) parts.push(`Cancelled: ${shortWho(o.cancelled_by)} ${when(o.cancelled_at)}`.trim());
+    // In the order things happened. Steps converted from before 11 Oct 2026 have no time: listed first.
+    const steps = [
+      ['Screenshot', o.screenshot_by, o.screenshot_at],
+      ['Confirmed', o.confirmed_by, o.confirmed_at],
+      ['Collected', o.collected_by, o.collected_at],
+      ['Cancelled', o.cancelled_by, o.cancelled_at],
+      ['Refunded', o.refunded_by, o.refunded_at],
+    ].filter(([, who]) => who)
+      .sort((a, b) => (a[2] ? new Date(a[2]).getTime() : 0) - (b[2] ? new Date(b[2]).getTime() : 0));
+    const parts = steps.map(([label, who, at]) => `${label}: ${shortWho(who)} ${when(at)}`.trim());
     return parts.length ? el('div', { className: 'hint audit', textContent: parts.join(' · ') }) : '';
   }
+
 
   // Screenshots waiting for QQ to confirm, across ALL dates, oldest first. In the
   // court case it took an audit years later to notice; this keeps it in view.
   async function loadUnconfirmed() {
-    const box = $('unconfirmed');
-    const { data, error } = await sb.from('orders')
-      .select('id, order_ref, customer_name, total_cents, screenshot_at, delivery_date_id')
-      .eq('payment_status', 'screenshot').eq('status', 'active').order('screenshot_at');
-    if (error || !data?.length) { box.hidden = true; box.replaceChildren(); return; }
     const days = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400e3);
+    const age = (iso, fallback) => {
+      // Orders converted by migration 005 have no screenshot time: don't count from 1970
+      if (!iso) return fallback;
+      const n = days(iso);
+      return n === 0 ? 'since today' : plural(n, 'day');
+    };
     const dateOf = (id) => dates.find((d) => d.id === id)?.delivery_date || '';
-    box.hidden = false;
-    box.replaceChildren(
-      el('b', { textContent: `⚠ ${plural(data.length, 'screenshot')} not yet confirmed in bank (${money(data.reduce((s, o) => s + o.total_cents, 0))})` }),
-      el('div', { className: 'hint', textContent: me.can_confirm_payments
-        ? 'Check each one in your bank app (look for the order reference), then set it to Confirmed in bank.'
-        : 'QQ needs to check these in her bank app before they count as paid.' }),
-      el('ul', {}, ...data.map((o) => el('li', {
-        textContent: `${o.order_ref} · ${o.customer_name} · ${money(o.total_cents)} · for ${dateOf(o.delivery_date_id)} · waiting ${days(o.screenshot_at) === 0 ? 'since today' : `${plural(days(o.screenshot_at), 'day')}`}`,
-      }))));
+    const fill = (box, rows, title, hint, line) => {
+      if (!rows?.length) { box.hidden = true; box.replaceChildren(); return; }
+      box.hidden = false;
+      box.replaceChildren(el('b', { textContent: title(rows) }), el('div', { className: 'hint', textContent: hint }),
+        el('ul', {}, ...rows.map((o) => el('li', { textContent: line(o) }))));
+    };
+    const total = (rows) => money(rows.reduce((s, o) => s + o.total_cents, 0));
+    const cols = 'id, order_ref, customer_name, total_cents, status, screenshot_at, cancelled_at, delivery_date_id';
+
+    // 1. Screenshots not yet confirmed: active AND cancelled (a cancelled one may still need a refund)
+    const shots = await sb.from('orders').select(cols).eq('payment_status', 'screenshot').order('screenshot_at');
+    fill($('unconfirmed'), shots.error ? [] : shots.data,
+      (rows) => `⚠ ${plural(rows.length, 'screenshot')} not yet confirmed in bank (${total(rows)})`,
+      me.can_confirm_payments
+        ? 'Check each one in your bank app (look for the order reference), then set it to Confirmed in bank, or Not paid if nothing arrived.'
+        : 'QQ needs to check these in her bank app before they count as paid.',
+      (o) => `${o.order_ref} · ${o.customer_name} · ${money(o.total_cents)} · for ${dateOf(o.delivery_date_id)} · waiting ${age(o.screenshot_at, 'since before 11 Oct 2026')}`
+        + (o.status === 'cancelled' ? ' · CANCELLED: refund if the money arrived' : ''));
+
+    // 2. Refunds to make: cancelled after the money was confirmed in the bank
+    const refunds = await sb.from('orders').select(cols).eq('status', 'cancelled').eq('payment_status', 'confirmed').order('cancelled_at');
+    fill($('refunds'), refunds.error ? [] : refunds.data,
+      (rows) => `✗ ${plural(rows.length, 'refund')} to make (${total(rows)})`,
+      me.can_confirm_payments
+        ? 'These orders were cancelled after payment. Refund each customer by PayNow, then set the order to Refunded.'
+        : 'These orders were cancelled after payment. QQ needs to refund them.',
+      (o) => {
+        const n = o.cancelled_at ? days(o.cancelled_at) : null;
+        const ago = n === null ? 'cancelled before 11 Oct 2026' : n === 0 ? 'cancelled today' : `cancelled ${plural(n, 'day')} ago`;
+        return `${o.order_ref} · ${o.customer_name} · ${money(o.total_cents)} · for ${dateOf(o.delivery_date_id)} · ${ago}`;
+      });
   }
+
 
   // CSV export for spreadsheets / record keeping
   $('export').addEventListener('click', () => {
     const date = dates.find((d) => d.id === Number($('order-date').value));
     const header = ['order_ref', 'date', 'name', 'phone', 'fulfilment', 'address', 'items', 'total', 'status', 'payment',
-      'screenshot_by', 'screenshot_at', 'confirmed_by', 'confirmed_at', 'collected_by', 'collected_at', 'notes', 'created_at'];
+      'screenshot_by', 'screenshot_at', 'confirmed_by', 'confirmed_at', 'refunded_by', 'refunded_at', 'collected_by', 'collected_at',
+      'cancelled_by', 'cancelled_at', 'notes', 'created_at'];
     const quote = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const rows = currentOrders.map((o) => [
       o.order_ref, date?.delivery_date, o.customer_name, o.phone, o.fulfilment, o.address,
       o.items.map((i) => `${i.product_name} ${itemSize(i.size_ml, i.container)} x${i.qty}`).join('; '),
       (o.total_cents / 100).toFixed(2), o.status, paymentLabel(o.payment_status),
       // Timestamps in Singapore time with offset, like the admin page shows them
-      o.screenshot_by, isoSgt(o.screenshot_at), o.confirmed_by, isoSgt(o.confirmed_at), o.collected_by, isoSgt(o.collected_at), o.notes, isoSgt(o.created_at),
+      o.screenshot_by, isoSgt(o.screenshot_at), o.confirmed_by, isoSgt(o.confirmed_at), o.refunded_by, isoSgt(o.refunded_at),
+      o.collected_by, isoSgt(o.collected_at), o.cancelled_by, isoSgt(o.cancelled_at), o.notes, isoSgt(o.created_at),
     ].map(quote).join(','));
     const blob = new Blob(['﻿' + [header.join(','), ...rows].join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = el('a', { href: URL.createObjectURL(blob), download: `mincho-orders-${date?.delivery_date || 'all'}.csv` });

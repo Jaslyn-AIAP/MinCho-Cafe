@@ -151,6 +151,7 @@ Check it under **Workers & Pages → mincho-keepalive → Logs** the next day.
   - Every step records who did it and when. The Orders tab lists screenshots still waiting for confirmation, across all dates.
   - PayNow references look like `MC1017KQXV` (before 11 Oct 2026: `MC1017-K7QF`; customers may type those without the dash). Customers WhatsApp their payment screenshots to Master Ming or QQ.
   - Database set up before 11 Oct 2026? Run `supabase/migrations_005_payment_confirmation.sql` once.
+  - **Cancelled after paying:** cancelling an order with a payment recorded warns first. A **Refunds to make** box lists cancelled orders whose payment was confirmed; QQ refunds by PayNow and sets the order to **Refunded** (QQ only, and only after Confirmed in bank). Needs `supabase/migrations_006_refunds.sql` (run once, after 005).
 - **Turn on delivery later:** Settings → tick **Offer delivery**, set the fee and Save. Customers then see a Delivery option and an address box.
 - **Free delivery:** Settings → **Free delivery for orders from** (e.g. 50). Orders of that amount or more, counting drinks only, deliver free; smaller orders pay the delivery fee. 0 = never free. If the database was set up before this setting existed, run `supabase/migrations_002_free_delivery.sql` once in the SQL Editor.
 - **Minimum order:** Settings → Minimum order (0 = none).
