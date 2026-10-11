@@ -1,5 +1,5 @@
 -- =============================================================================
--- MinCho Cafe — database schema for Supabase (PostgreSQL)
+-- Ming’s Home Brew Tea (formerly MinCho Cafe) — database schema for Supabase (PostgreSQL)
 -- =============================================================================
 -- HOW TO RUN
 --   Supabase dashboard → your project → SQL Editor → New query →
@@ -47,7 +47,7 @@ $$;
 -- ---------------------------------------------------------------------------
 create table public.settings (
   id                  int primary key default 1 check (id = 1),  -- enforce single row
-  shop_name           text    not null default 'MinCho Cafe',
+  shop_name           text    not null default 'Ming’s Home Brew Tea',
   ordering_open       boolean not null default true,   -- master on/off switch
   invite_code         text    not null,                -- shared code customers enter
   delivery_enabled    boolean not null default false,  -- also controls address collection

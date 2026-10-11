@@ -2,7 +2,7 @@
   "name": "mincho-cafe",
   "private": true,
   "type": "module",
-  "description": "Invite-only order site for MinCho Cafe (Cloudflare Pages + Supabase)",
+  "description": "Invite-only order site for Ming’s Home Brew Tea (Cloudflare Pages + Supabase)",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "dev": "npx wrangler pages dev public"

@@ -1,6 +1,8 @@
-# MinCho Cafe — order site
+# Ming’s Home Brew Tea — order site
 
-Invite-only ordering for MinCho Cafe (Ming Ming & QQ). Customers enter a shared invite code, pick a date and their tea (sizes such as 250 ml, 500 ml and 1 L, each as a packet or a bottle, set by the owners), and pay by PayNow. Owners manage everything from `/admin`.
+_Formerly MinCho Cafe. The web address, repository, Supabase organisation and internal names (`mincho-…`) keep the old name; only what customers and owners see changed (11 Oct 2026)._
+
+Invite-only ordering for Ming’s Home Brew Tea (Ming Ming & QQ). Customers enter a shared invite code, pick a date and their tea (sizes such as 250 ml, 500 ml and 1 L, each as a packet or a bottle, set by the owners), and pay by PayNow. Owners manage everything from `/admin`.
 
 - **Hosting:** Cloudflare Pages (static pages + server functions), free plan
 - **Database and owner login:** Supabase (PostgreSQL + Auth), free plan

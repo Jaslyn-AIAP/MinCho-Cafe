@@ -175,7 +175,7 @@
 
     // Menu board. Chinese names are fixed labels for the two current drinks;
     // a new product added in admin simply shows without one.
-    const ZH = { milk_tea: '港式奶茶', lemon_tea: '港式檸茶' };
+    const ZH = { milk_tea: '港式奶茶', lemon_tea: '港式檸檬茶' };
     const board = $('menu');
     board.replaceChildren();
     for (const p of menu.products) {
@@ -429,7 +429,7 @@
 
     $('chit').replaceChildren(
       el('div', { className: 'chit-top' },
-        el('span', { className: 'logo' }, el('span', { className: 'logo-name', textContent: 'MinCho' }), el('span', { className: 'logo-cafe', textContent: 'Cafe' }), el('span', { className: 'logo-hk', lang: 'zh-Hant', textContent: '港式茶' })),
+        el('span', { className: 'logo' }, el('span', { className: 'logo-name', textContent: 'Ming’s' }), el('span', { className: 'logo-cafe', textContent: 'Home Brew Tea' }), el('span', { className: 'logo-hk', lang: 'zh-Hant', textContent: '港式茶' })),
         el('div', { className: 'stamp', ariaHidden: 'true' }, el('b', { lang: 'zh-Hant', textContent: '已收到' }), el('small', { textContent: 'RECEIVED' }))),
       el('p', { className: 'chit-label' }, 'Order reference / ', el('span', { lang: 'zh-Hant', textContent: '訂單編號' })),
       el('div', { className: 'ref', textContent: o.orderRef }),

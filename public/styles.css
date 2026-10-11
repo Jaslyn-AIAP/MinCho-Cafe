@@ -1,5 +1,5 @@
 /* =============================================================================
-   MinCho Cafe — shared styles (order page + admin page)
+   Ming’s Home Brew Tea (formerly MinCho Cafe) — shared styles (order page + admin page)
    Direction: "Bing Sutt, brightened" (chosen in Figma Make, Oct 2026).
    An old Hong Kong ice room: sand walls, jade signage, vermilion buttons,
    a grid-paper strip under the shop sign, and order chits on cream paper.
@@ -461,3 +461,13 @@ input.invalid, select.invalid { border-color: var(--bad) !important; box-shadow:
 @keyframes item-flash { 0%, 60% { background: color-mix(in srgb, var(--bad) 22%, transparent); } 100% { background: transparent; } }
 .flash-item { animation: item-flash 1.6s ease-out; }
 input.invalid:focus, select.invalid:focus { outline-color: var(--bad); }
+
+/* Longer shop name (Ming's Home Brew Tea): on phones the logo becomes two lines,
+   "Ming's" above "HOME BREW TEA · 港式茶", and the strip drops the repeated name. */
+.logo-cafe, .logo-hk { white-space: nowrap; }
+@media (max-width: 480px) {
+  .logo { display: inline-grid; grid-template-columns: auto auto; column-gap: 8px; row-gap: 3px; align-items: baseline; }
+  .logo-name { grid-column: 1 / -1; }
+  .logo-hk { margin-left: 0; }
+  .strip-name { display: none; }
+}
