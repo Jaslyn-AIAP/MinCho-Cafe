@@ -14,8 +14,9 @@
   const $ = (id) => document.getElementById(id);
   const money = (cents) => `$${(cents / 100).toFixed(2)}`;
   const sizeLabel = (ml) => (ml >= 1000 ? `${ml / 1000} L` : `${ml} ml`);
-  // "250 ml packet" / "1 L bottle". Old orders without a container fall back to the current size list.
-  const itemSize = (ml, container) => `${sizeLabel(ml)} ${container || sizes?.find((s) => s.ml === ml)?.container || 'bottle'}`;
+  // "250 ml packet" / "1 L bottle". A size is volume + container, so 500 ml can be
+  // both a packet and a bottle. Order items saved before containers existed were bottles.
+  const itemSize = (ml, container) => `${sizeLabel(ml)} ${container || 'bottle'}`;
   const el = (tag, props = {}, ...children) => {
     const node = Object.assign(document.createElement(tag), props);
     for (const c of children) node.append(c);
@@ -49,13 +50,43 @@
   // ---------------------------------------------------------------------------
   /** Show a Supabase error in a status element (or the console). */
   /** Show a status line in a message element: kind 'ok' (green, ✓, with time) or 'bad' (red, ✗, with time). */
-  function say(el, text, kind) {
-    el.classList.remove('status-ok', 'status-warn', 'status-bad');
+  // `fields` (optional): the input(s) that caused a refusal. They get a red border
+  // and the cursor, so the problem shows where the owner was typing.
+  function say(el, text, kind, fields) {
+    el.classList.remove('status-ok', 'status-warn', 'status-bad', 'flash');
     if (kind) el.classList.add(`status-${kind}`);
     // Failures get a cross and capitalised wording, so they don't rely on colour alone.
     // The timestamp goes on its own last line, e.g. "2026-10-11 00:20" (Singapore time).
     const symbol = { ok: '✓', warn: '⚠', bad: '✗' }[kind];
     el.textContent = symbol ? `${symbol} ${text}\n${stampSgt()}` : text;
+    if (!kind) return; // "Saving…" and similar: no flash, no scrolling
+    void el.offsetWidth;           // restart the flash animation if it is already showing
+    el.classList.add('flash');
+    // On a phone the message can be below the screen edge: bring it into view
+    const box = el.getBoundingClientRect();
+    if (box.top < 0 || box.bottom > window.innerHeight) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (kind === 'bad' && fields) markInvalid(fields);
+  }
+
+  /** Red border on the field(s) that caused a refusal; cleared as soon as the owner edits it. */
+  function markInvalid(fields) {
+    const list = [].concat(fields).filter(Boolean);
+    for (const f of list) {
+      f.classList.add('invalid');
+      f.setAttribute('aria-invalid', 'true');
+      const clear = () => { f.classList.remove('invalid'); f.removeAttribute('aria-invalid'); };
+      f.addEventListener('input', clear, { once: true });
+      f.addEventListener('change', clear, { once: true });
+    }
+    list[0]?.focus({ preventScroll: true });
+  }
+
+  /** Briefly highlight an existing item (e.g. the size or date that already exists). */
+  function flashItem(node) {
+    if (!node) return;
+    node.classList.remove('flash-item');
+    void node.offsetWidth;
+    node.classList.add('flash-item');
   }
 
   /** Current Singapore time as "2026-10-11 00:20", whatever the device's time zone. */
@@ -195,10 +226,10 @@
     const [s, p, z, d] = await Promise.all([
       sb.from('settings').select('*').eq('id', 1).single(),
       sb.from('products').select('*').order('sort_order'),
-      sb.from('bottle_sizes').select('*').order('ml'),
+      sb.from('bottle_sizes').select('*').order('ml').order('container'),
       sb.from('delivery_dates').select('*').order('delivery_date'),
     ]);
-    for (const r of [s, p, z, d]) if (r.error) return report(r.error);
+    for (const r of [s, p, z, d]) if (r.error) return say($('shop-status'), `FAILED TO LOAD. ${report(r.error)} Reload the page to try again.`, 'bad');
     settings = s.data; products = p.data; sizes = z.data; dates = d.data;
     renderDateSelect();
     renderDates();
@@ -227,12 +258,19 @@
       btn.addEventListener('click', () => document.querySelector(`[data-tab="${tab}"]`).click());
       return btn;
     };
-    if (!settings.ordering_open) {
-      box.classList.add('status-bad');
-      box.replaceChildren('✗ Customers see the "Shop closed" sign. ', goTo('settings', 'Tick Shop open in Settings'), ' to take orders.');
-    } else if (open.length === 0) {
-      box.classList.add('status-warn');
-      box.replaceChildren('⚠ Customers see the "Orders paused" sign: no date is open for orders. ', goTo('dates', 'Add a future date in Dates'), ' to take orders.');
+    // Everything that stops customers ordering, listed together so owners see it all at once.
+    // (Customers see only one sign: Shop closed first, then Orders paused.)
+    const missing = [];
+    if (!settings.ordering_open) missing.push(['Shop open is unticked. ', goTo('settings', 'Tick Shop open in Settings'), ', then Save.']);
+    if (open.length === 0) missing.push(['No date is open for orders. ', goTo('dates', 'Add a future date in Dates'), '.']);
+    if (!sizes.some((s) => s.active)) missing.push(['No size is on sale. ', goTo('menu', 'Tick or add a size in Menu & prices'), '.']);
+    if (!products.some((p) => p.active)) missing.push(['No drink is on the menu. ', goTo('menu', 'Tick "On the menu" for a drink in Menu & prices'), ', then Save.']);
+    if (missing.length) {
+      // Red when the owners closed the shop; amber when it is open but something is missing
+      box.classList.add(settings.ordering_open ? 'status-warn' : 'status-bad');
+      const sign = settings.ordering_open ? '⚠ Customers see the "Orders paused" sign.' : '✗ Customers see the "Shop closed" sign.';
+      box.replaceChildren(sign, missing.length === 1 ? ' To take orders:' : ` To take orders, fix all ${missing.length}:`,
+        ...missing.flatMap((line) => ['\n• ', ...line]));
     } else {
       box.classList.add('status-ok');
       const list = open.map((d) => `${formatSgt(new Date(`${d.delivery_date}T12:00:00+08:00`), { weekday: 'short', day: 'numeric', month: 'short' })} (orders close ${formatSgt(cutoffFor(d.delivery_date), { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })})`);
@@ -264,7 +302,9 @@
       el('option', { value: String(d.id), textContent: `${d.delivery_date}${d.active ? '' : ' (inactive)'}` })));
     // Default: the next upcoming date, otherwise the latest
     const upcoming = dates.find((d) => d.delivery_date >= todaySgt());
-    select.value = previous || String((upcoming || dates[dates.length - 1] || {}).id || '');
+    // Keep the owner's choice, unless that date no longer exists (e.g. just deleted)
+    const stillThere = dates.some((d) => String(d.id) === previous);
+    select.value = stillThere ? previous : String((upcoming || dates[dates.length - 1] || {}).id || '');
   }
   $('order-date').addEventListener('change', loadOrders);
   $('refresh').addEventListener('click', loadOrders);
@@ -273,7 +313,7 @@
     const dateId = Number($('order-date').value);
     if (!dateId) { currentOrders = []; renderOrders(); return; }
     const { data, error } = await sb.from('orders').select('*').eq('delivery_date_id', dateId).order('created_at');
-    if (error) return report(error);
+    if (error) return say($('orders-msg'), `FAILED TO LOAD ORDERS. ${report(error)}`, 'bad');
     currentOrders = data;
     renderOrders();
   }
@@ -289,10 +329,16 @@
       const bySize = new Map();
       for (const o of live) for (const i of o.items) if (i.product_id === p.id) {
         ml += i.size_ml * i.qty;
-        bySize.set(i.size_ml, (bySize.get(i.size_ml) || 0) + i.qty);
+        // Counted per volume AND container: 500 ml packets and 500 ml bottles are brewed into different things
+        const key = `${i.size_ml}|${i.container || 'bottle'}`;
+        bySize.set(key, (bySize.get(key) || 0) + i.qty);
       }
-      // "250 ml packet × 9 | 500 ml bottle × 7 | 1 L bottle × 1" — each item kept on one line
-      const parts = [...bySize.entries()].sort((a, b) => a[0] - b[0]).map(([s, n]) => el('span', { className: 'nowrap', textContent: `${itemSize(s)} × ${n}` }));
+      // "250 ml packet × 9 | 500 ml bottle × 7 | 1 L bottle × 1" — each item kept on one line,
+      // sorted by volume, then container
+      const parts = [...bySize.entries()]
+        .map(([key, n]) => { const [ml, container] = key.split('|'); return { ml: Number(ml), container, n }; })
+        .sort((a, b) => a.ml - b.ml || a.container.localeCompare(b.container))
+        .map(({ ml: v, container, n }) => el('span', { className: 'nowrap', textContent: `${itemSize(v, container)} × ${n}` }));
       const breakdown = parts.length ? parts.flatMap((part, i) => (i ? [' | ', part] : [part])) : ['None'];
       brew.append(el('div', { className: 'tile' },
         el('div', { className: 'hint', textContent: p.name }),
@@ -315,10 +361,12 @@
       const status = el('select', { ariaLabel: `Status for ${o.order_ref}` },
         ...STATUSES.map(([v, label]) => el('option', { value: v, textContent: label, selected: o.status === v })));
       status.addEventListener('change', async () => {
+        const label = (v) => STATUSES.find(([value]) => value === v)[1];
         const { error } = await sb.from('orders').update({ status: status.value }).eq('id', o.id);
-        if (error) { report(error); status.value = o.status; return; }
+        if (error) { say($('orders-msg'), `FAILED TO SAVE. ${o.order_ref} is still ${label(o.status)}. ${report(error)}`, 'bad'); status.value = o.status; return; }
         o.status = status.value;
         renderOrders();
+        say($('orders-msg'), `${o.order_ref} (${o.customer_name}) marked ${label(o.status)}.`, 'ok');
       });
       const items = o.items.map((i) => `${i.product_name.replace('Hong Kong ', '')} ${itemSize(i.size_ml, i.container)} × ${i.qty}`).join('\n');
       body.append(el('tr', {},
@@ -359,51 +407,74 @@
   // ---------------------------------------------------------------------------
   // Dates tab
   // ---------------------------------------------------------------------------
+  // "Sat 31 Oct 2026" for a YYYY-MM-DD date
+  const dateName = (iso) => longSgt(new Date(`${iso}T00:00:00+08:00`)).split(',')[0];
+
   $('date-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const date = $('new-date').value;
-    if (!date) return;
+    const msg = $('date-msg');
+    const date = $('new-date').value;     // YYYY-MM-DD from the date picker
+    if (!date) { say(msg, 'FAILED TO ADD. Pick a date first.', 'bad', $('new-date')); return; }
+    if (date < todaySgt()) { say(msg, `FAILED TO ADD. ${dateName(date)} is in the past.`, 'bad', $('new-date')); return; }
+    const existing = dates.find((d) => d.delivery_date === date);
+    if (existing) {
+      say(msg, existing.active
+        ? `FAILED TO ADD. ${dateName(date)} is already in the list.`
+        : `FAILED TO ADD. ${dateName(date)} is already in the list, but not active. Tick its Active box instead.`, 'bad', $('new-date'));
+      flashItem($('dates-table').querySelector(`tr[data-date="${date}"]`)); // point at the existing one
+      return;
+    }
     const { error } = await sb.from('delivery_dates').insert({ delivery_date: date, note: $('new-date-note').value.trim() });
-    if (error) { alertInline($('dates-table'), error.code === '23505' ? 'That date already exists.' : report(error)); return; }
+    if (error) { say(msg, error.code === '23505' ? `FAILED TO ADD. ${dateName(date)} is already in the list.` : `FAILED TO ADD. ${report(error)}`, 'bad', $('new-date')); return; }
     $('new-date').value = '';
     $('new-date-note').value = '';
     await loadAll();
+    const cut = cutoffFor(date);
+    say(msg, Date.now() <= cut.getTime()
+      ? `Added ${dateName(date)}. Orders close ${longSgt(cut)}.`
+      : `Added ${dateName(date)}, but its order cutoff (${longSgt(cut)}) has already passed, so customers can't order for it. Shorten the cutoff in Settings if you need to.`,
+      Date.now() <= cut.getTime() ? 'ok' : 'warn');
   });
-
-  function alertInline(near, msg) {
-    const p = el('p', { className: 'error', textContent: msg });
-    near.before(p);
-    setTimeout(() => p.remove(), 5000);
-  }
 
   function renderDates() {
     const table = $('dates-table');
-    const head = el('thead', {}, el('tr', {}, ...['Date', 'Note', 'Active', ''].map((h) => el('th', { textContent: h }))));
+    const msg = $('date-msg');
+    const head = el('thead', {}, el('tr', {}, ...['Date', 'Orders close', 'Note', 'Active', ''].map((h) => el('th', { textContent: h }))));
     const body = el('tbody');
     for (const d of [...dates].reverse()) {
       const active = el('input', { type: 'checkbox', checked: d.active, ariaLabel: `Active ${d.delivery_date}` });
       active.addEventListener('change', async () => {
         const { error } = await sb.from('delivery_dates').update({ active: active.checked }).eq('id', d.id);
-        if (error) { report(error); active.checked = d.active; return; }
+        if (error) { say(msg, `FAILED TO SAVE. ${report(error)}`, 'bad'); active.checked = d.active; return; }
         d.active = active.checked;
         renderDateSelect();
         renderShopStatus();
+        say(msg, d.active ? `${dateName(d.delivery_date)} is active.` : `${dateName(d.delivery_date)} is no longer active: customers can't order for it.`, 'ok');
       });
       const del = el('button', { type: 'button', className: 'small secondary', textContent: 'Delete' });
       confirmTap(del, 'Delete', async () => {
         const { error } = await sb.from('delivery_dates').delete().eq('id', d.id);
         if (error) {
-          // 23503 = foreign key violation: orders exist for this date
-          alertInline(table, error.code === '23503' ? 'This date has orders. Untick "Active" instead of deleting it.' : report(error));
+          // 23503 = foreign key violation: orders exist for this date, and the database refuses
+          say(msg, error.code === '23503'
+            ? `FAILED TO DELETE. ${dateName(d.delivery_date)} has orders, so it can't be deleted. Untick Active instead.`
+            : `FAILED TO DELETE. ${report(error)}`, 'bad');
           return;
         }
         await loadAll();
+        say(msg, `Deleted ${dateName(d.delivery_date)}.`, 'ok');
       });
-      body.append(el('tr', {},
-        el('td', { textContent: d.delivery_date + (d.delivery_date < todaySgt() ? ' (past)' : '') }),
+      // Short forms for a phone-width table: "Sat 24 Oct" and "Fri 23 Oct, 11:59 pm" (year left out)
+      const cut = cutoffFor(d.delivery_date);
+      const noYear = (text) => text.replace(/ \d{4}(,|$)/, '$1');
+      const row = el('tr', {},
+        el('td', { className: 'nowrap', textContent: noYear(dateName(d.delivery_date)) + (d.delivery_date < todaySgt() ? ' (past)' : '') }),
+        el('td', { className: Date.now() <= cut.getTime() ? '' : 'closed-cut', textContent: Date.now() <= cut.getTime() ? noYear(longSgt(cut)) : 'Closed' }),
         el('td', { textContent: d.note }),
         el('td', {}, active),
-        el('td', {}, del)));
+        el('td', {}, del));
+      row.dataset.date = d.delivery_date;
+      body.append(row);
     }
     table.replaceChildren(head, body);
   }
@@ -423,11 +494,13 @@
       const save = el('button', { type: 'button', className: 'small', textContent: 'Save' });
       save.addEventListener('click', async () => {
         const cents = Math.round(Number(price.value) * 100);
-        if (!Number.isFinite(cents) || cents <= 0) { msg.textContent = 'Enter a price above $0.'; return; }
-        const { error } = await sb.from('products')
-          .update({ name: name.value.trim() || p.name, description: desc.value.trim(), price_per_litre_cents: cents, active: active.checked })
-          .eq('id', p.id);
-        msg.textContent = error ? `Error: ${report(error)}` : 'Saved';
+        if (!Number.isFinite(cents) || cents <= 0) { say(msg, 'FAILED TO SAVE. Enter a price per litre above $0.', 'bad', price); return; }
+        const update = { name: name.value.trim() || p.name, description: desc.value.trim(), price_per_litre_cents: cents, active: active.checked };
+        const { error } = await sb.from('products').update(update).eq('id', p.id);
+        if (error) { say(msg, `FAILED TO SAVE. ${report(error)}`, 'bad'); return; }
+        Object.assign(p, update);
+        renderShopStatus();
+        say(msg, `Saved ${p.name}: ${money(cents)} per litre, ${p.active ? 'on the menu' : 'hidden from customers'}.`, 'ok');
       });
       box.append(el('div', { className: 'tile stack' },
         el('label', {}, 'Name', name),
@@ -442,10 +515,15 @@
     for (const s of sizes) {
       const cb = el('input', { type: 'checkbox', checked: s.active });
       cb.addEventListener('change', async () => {
-        const { error } = await sb.from('bottle_sizes').update({ active: cb.checked }).eq('ml', s.ml);
-        if (error) { report(error); cb.checked = s.active; }
+        const { error } = await sb.from('bottle_sizes').update({ active: cb.checked }).eq('ml', s.ml).eq('container', s.container);
+        if (error) { say($('size-msg'), `FAILED TO SAVE. ${report(error)}`, 'bad'); cb.checked = s.active; return; }
+        s.active = cb.checked;
+        renderShopStatus();
+        say($('size-msg'), s.active ? `${itemSize(s.ml, s.container)} is on sale.` : `${itemSize(s.ml, s.container)} is no longer offered to customers.`, 'ok');
       });
-      sizeBox.append(el('label', { className: 'switch' }, cb, itemSize(s.ml, s.container)));
+      const label = el('label', { className: 'switch' }, cb, itemSize(s.ml, s.container));
+      label.dataset.size = `${s.ml}|${s.container}`;
+      sizeBox.append(label);
     }
   }
 
@@ -456,20 +534,20 @@
     const msg = $('product-msg');
     const name = $('new-name').value.trim();
     const cents = Math.round(Number($('new-price').value) * 100);
-    if (!name) { msg.textContent = 'Enter a name.'; return; }
-    if (!Number.isFinite(cents) || cents <= 0) { msg.textContent = 'Enter a price per litre above $0.'; return; }
-    if (products.some((p) => p.name.toLowerCase() === name.toLowerCase())) { msg.textContent = 'A drink with that name already exists.'; return; }
+    if (!name) { say(msg, 'FAILED TO ADD. Enter a name.', 'bad', $('new-name')); return; }
+    if (!Number.isFinite(cents) || cents <= 0) { say(msg, 'FAILED TO ADD. Enter a price per litre above $0.', 'bad', $('new-price')); return; }
+    if (products.some((p) => p.name.toLowerCase() === name.toLowerCase())) { say(msg, `FAILED TO ADD. ${name} is already a drink.`, 'bad', $('new-name')); return; }
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 30) || 'drink';
     const id = products.some((p) => p.id === slug) ? `${slug}_${Date.now().toString(36)}` : slug;
     const sortOrder = Math.max(0, ...products.map((p) => p.sort_order || 0)) + 1;
     const { error } = await sb.from('products').insert({
       id, name, description: $('new-desc').value.trim(), price_per_litre_cents: cents, active: true, sort_order: sortOrder,
     });
-    if (error) { msg.textContent = `Error: ${report(error)}`; return; }
-    msg.textContent = `Added ${name}. It's on the menu now; untick "On the menu" to hide it.`;
+    if (error) { say(msg, `FAILED TO ADD. ${report(error)}`, 'bad'); return; }
+    say(msg, `Added ${name} at ${money(cents)} per litre. It's on the menu now; untick "On the menu" to hide it.`, 'ok');
     e.target.reset();
     const r = await sb.from('products').select('*').order('sort_order');
-    if (!r.error) { products = r.data; renderMenu(); renderOrders(); }
+    if (!r.error) { products = r.data; renderMenu(); renderOrders(); renderShopStatus(); }
   });
 
   // Add a size (packet or bottle). Its price is worked out automatically from each
@@ -478,15 +556,25 @@
     e.preventDefault();
     const msg = $('size-msg');
     const ml = Number($('new-size').value);
-    if (!Number.isInteger(ml) || ml < 50 || ml > 5000) { msg.textContent = 'Enter a whole number of ml between 50 and 5000.'; return; }
+    if (!Number.isInteger(ml) || ml < 50 || ml > 5000) { say(msg, 'FAILED TO ADD. Enter a whole number of ml between 50 and 5000 (1 L = 1000).', 'bad', $('new-size')); return; }
     const container = $('new-size-container').value === 'packet' ? 'packet' : 'bottle';
+    // A size is volume + container: 500 ml packet and 500 ml bottle can both exist.
+    const existing = sizes.find((s) => s.ml === ml && s.container === container);
+    if (existing) {
+      say(msg, existing.active
+        ? `FAILED TO ADD. ${itemSize(ml, container)} is already a size.`
+        : `FAILED TO ADD. ${itemSize(ml, container)} is already a size, but unticked. Tick it above to offer it again.`, 'bad',
+        [$('new-size'), $('new-size-container')]);
+      flashItem($('sizes').querySelector(`[data-size="${ml}|${container}"]`)); // point at the existing one
+      return;
+    }
     const { error } = await sb.from('bottle_sizes').insert({ ml, container, active: true });
-    if (error) { msg.textContent = error.code === '23505' ? `${sizeLabel(ml)} already exists. Tick it above to show it.` : `Error: ${report(error)}`; return; }
+    if (error) { say(msg, error.code === '23505' ? `FAILED TO ADD. ${itemSize(ml, container)} is already a size.` : `FAILED TO ADD. ${report(error)}`, 'bad'); return; }
     const examples = products.filter((p) => p.active).map((p) => `${p.name.replace('Hong Kong ', '')} ${money(Math.round(p.price_per_litre_cents * ml / 1000))}`).join(' | ');
-    msg.textContent = `Added ${itemSize(ml, container)}. Prices: ${examples}`;
+    say(msg, `Added ${itemSize(ml, container)}. Prices: ${examples}`, 'ok');
     $('new-size').value = '';
-    const z = await sb.from('bottle_sizes').select('*').order('ml');
-    if (!z.error) { sizes = z.data; renderMenu(); }
+    const z = await sb.from('bottle_sizes').select('*').order('ml').order('container');
+    if (!z.error) { sizes = z.data; renderMenu(); renderShopStatus(); }
   });
 
   // ---------------------------------------------------------------------------
@@ -519,7 +607,7 @@
     const btn = $('save-settings');
     const toCents = (v) => Math.max(0, Math.round(Number(v || 0) * 100));
     const paynow = $('s-paynow').value.replace(/\s/g, '');
-    if (!/^[89]\d{7}$/.test(paynow)) { say(msg, 'FAILED TO SAVE. PayNow number must be an 8-digit Singapore mobile number (starts with 8 or 9).', 'bad'); return; }
+    if (!/^[89]\d{7}$/.test(paynow)) { say(msg, 'FAILED TO SAVE. PayNow number must be an 8-digit Singapore mobile number (starts with 8 or 9).', 'bad', $('s-paynow')); return; }
     const update = {
       ordering_open: $('s-open').checked,
       delivery_enabled: $('s-delivery').checked,
@@ -601,10 +689,10 @@
     // Save the retention period first so the purge uses what is on screen
     const days = Math.min(730, Math.max(7, parseInt($('s-retention').value || '90', 10)));
     const up = await sb.from('settings').update({ retention_days: days }).eq('id', 1);
-    if (up.error) return report(up.error, msg);
+    if (up.error) return say(msg, `FAILED. Nothing deleted. ${report(up.error)}`, 'bad');
     const { data, error } = await sb.rpc('purge_old_orders');
-    if (error) return report(error, msg);
-    msg.textContent = `Deleted ${data} old order${data === 1 ? '' : 's'}.`;
+    if (error) return say(msg, `FAILED. Nothing deleted. ${report(error)}`, 'bad');
+    say(msg, `Deleted ${data} order${data === 1 ? '' : 's'} older than ${days} days.`, 'ok');
     await loadOrders();
   });
 
@@ -624,7 +712,7 @@
         action = el('button', { type: 'button', className: 'small secondary', textContent: 'Remove' });
         confirmTap(action, 'Remove', async () => {
           const r = await ownerApi('DELETE', { userId: o.user_id });
-          $('owner-msg').textContent = r.ok ? `Removed ${o.email}.` : r.data.error || 'Could not remove.';
+          say($('owner-msg'), r.ok ? `Removed ${o.email}. Their login no longer works.` : `FAILED TO REMOVE. ${r.data.error || 'Please try again.'}`, r.ok ? 'ok' : 'bad');
           await loadOwners();
         });
       }
@@ -641,13 +729,13 @@
     const msg = $('owner-msg');
     const email = $('owner-email').value.trim();
     const password = $('owner-password').value;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.textContent = 'Enter a valid email.'; return; }
-    if (password.length < 10) { msg.textContent = 'Starting password needs at least 10 characters.'; return; }
-    msg.textContent = 'Adding…';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say(msg, 'FAILED TO ADD. Enter a valid email.', 'bad', $('owner-email')); return; }
+    if (password.length < 10) { say(msg, 'FAILED TO ADD. The starting password needs at least 10 characters.', 'bad', $('owner-password')); return; }
+    say(msg, 'Adding…');
     const r = await ownerApi('POST', { email, password });
-    if (!r.ok) { msg.textContent = r.data.error || 'Could not add the owner.'; return; }
+    if (!r.ok) { say(msg, `FAILED TO ADD. ${r.data.error || 'Please try again.'}`, 'bad', /email/i.test(r.data.error || '') ? $('owner-email') : null); return; }
     e.target.reset();
-    msg.textContent = `Added ${email}. Send them the starting password privately.`;
+    say(msg, `Added ${email} as an owner. Send them the starting password privately.`, 'ok');
     await loadOwners();
   });
 
@@ -657,12 +745,12 @@
     e.preventDefault();
     const msg = $('password-msg');
     const pw = $('new-password').value;
-    if (pw.length < 10) { msg.textContent = 'Use at least 10 characters.'; return; }
-    if (pw !== $('new-password-2').value) { msg.textContent = 'The two passwords do not match.'; return; }
+    if (pw.length < 10) { say(msg, 'FAILED TO CHANGE. Use at least 10 characters.', 'bad', $('new-password')); return; }
+    if (pw !== $('new-password-2').value) { say(msg, 'FAILED TO CHANGE. The two passwords do not match.', 'bad', $('new-password-2')); return; }
     const { error } = await sb.auth.updateUser({ password: pw });
-    if (error) { msg.textContent = `Error: ${report(error)}`; return; }
+    if (error) { say(msg, `FAILED TO CHANGE. ${report(error)}`, 'bad'); return; }
     e.target.reset();
-    msg.textContent = 'Password changed. Use the new one next time you log in.';
+    say(msg, 'Password changed. Use the new one next time you log in.', 'ok');
   });
 
   init().catch((err) => {

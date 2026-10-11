@@ -119,3 +119,56 @@ test('250 ml is a packet; 500 ml and 1 L are bottles', async () => {
   assert.deepEqual(r.items.map((i) => itemSize(i.size_ml, i.container)), ['250 ml packet', '1 L bottle']);
   assert.equal(itemSize(500), '500 ml bottle', 'older orders without a container read as bottles');
 });
+
+// ---------------------------------------------------------------------------
+// A size is volume + container (migration 004): 500 ml packet and 500 ml bottle
+// ---------------------------------------------------------------------------
+const both = [
+  { ml: 250, container: 'packet', active: true },
+  { ml: 500, container: 'bottle', active: true },
+  { ml: 500, container: 'packet', active: true },
+  { ml: 1000, container: 'bottle', active: false },
+  { ml: 1000, container: 'packet', active: true },
+];
+
+test('500 ml packet and 500 ml bottle are separate lines at the same price', async () => {
+  const { itemSize } = await import('../lib/rules.js');
+  const r = priceItems([
+    { product_id: 'milk_tea', size_ml: 500, container: 'packet', qty: 2 },
+    { product_id: 'milk_tea', size_ml: 500, container: 'bottle', qty: 1 },
+    { product_id: 'milk_tea', size_ml: 500, container: 'packet', qty: 1 },   // merged with the first line
+  ], products, both);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.items.map((i) => `${itemSize(i.size_ml, i.container)} x${i.qty} @${i.unit_price_cents}`),
+    ['500 ml bottle x1 @900', '500 ml packet x3 @900']);
+  assert.equal(r.subtotalCents, 900 * 4);
+  assert.equal(r.totalMl, 2000);
+});
+
+test('an unticked container is refused even if the same volume is on sale in another', () => {
+  assert.equal(priceItems([{ product_id: 'milk_tea', size_ml: 1000, container: 'bottle', qty: 1 }], products, both).ok, false);
+  assert.equal(priceItems([{ product_id: 'milk_tea', size_ml: 1000, container: 'packet', qty: 1 }], products, both).ok, true);
+  assert.equal(priceItems([{ product_id: 'milk_tea', size_ml: 500, container: 'can', qty: 1 }], products, both).ok, false);
+});
+
+test('an item without a container is accepted only when the volume is unambiguous', () => {
+  // 1000 ml: only the packet is on sale, so a page loaded before the change still works
+  const r = priceItems([{ product_id: 'milk_tea', size_ml: 1000, qty: 1 }], products, both);
+  assert.equal(r.ok, true);
+  assert.equal(r.items[0].container, 'packet');
+  // 500 ml: packet AND bottle on sale, so it is ambiguous and refused with a refresh hint
+  const amb = priceItems([{ product_id: 'milk_tea', size_ml: 500, qty: 1 }], products, both);
+  assert.equal(amb.ok, false);
+  assert.match(amb.error, /refresh/);
+});
+
+test('volume labels: ml below 1 L, litres from 1 L, prices pro-rata with rounding', async () => {
+  const { sizeLabel, bottlePriceCents } = await import('../lib/rules.js');
+  assert.deepEqual([250, 500, 750, 999, 1000, 1250, 1500, 2000].map(sizeLabel),
+    ['250 ml', '500 ml', '750 ml', '999 ml', '1 L', '1.25 L', '1.5 L', '2 L']);
+  assert.equal(bottlePriceCents(1800, 1000), 1800);
+  assert.equal(bottlePriceCents(1800, 500), 900);
+  assert.equal(bottlePriceCents(1200, 250), 300);
+  assert.equal(bottlePriceCents(1200, 333), 400);   // 399.6 cents rounds to $4.00
+  assert.equal(bottlePriceCents(1800, 330), 594);
+});

@@ -31,7 +31,10 @@ export async function onRequestPost({ request, env }) {
         closes: formatSgt(cutoffInstant(d.delivery_date, settings.cutoff_days, settings.cutoff_time)),
       }));
 
-    const activeSizes = sizes.filter((s) => s.active).map((s) => s.ml);
+    // A size is volume + container, e.g. { ml: 500, container: 'packet' }.
+    // Prices depend on volume only, so bottlePrices below is keyed by ml.
+    const activeSizes = sizes.filter((s) => s.active).map((s) => ({ ml: s.ml, container: s.container || 'bottle' }));
+    const activeMl = [...new Set(activeSizes.map((s) => s.ml))];
 
     return json({
       shopName: settings.shop_name,
@@ -43,7 +46,6 @@ export async function onRequestPost({ request, env }) {
       collectionNote: settings.collection_note,
       turnstileSiteKey: env.TURNSTILE_SITE_KEY,
       sizes: activeSizes,
-      containers: Object.fromEntries(sizes.map((s) => [s.ml, s.container || 'bottle'])),
       products: products
         .filter((p) => p.active)
         .map((p) => ({
@@ -52,7 +54,7 @@ export async function onRequestPost({ request, env }) {
           description: p.description,
           pricePerLitreCents: p.price_per_litre_cents,
           // Pre-computed so the browser shows exactly what the server will charge
-          bottlePrices: Object.fromEntries(activeSizes.map((ml) => [ml, bottlePriceCents(p.price_per_litre_cents, ml)])),
+          bottlePrices: Object.fromEntries(activeMl.map((ml) => [ml, bottlePriceCents(p.price_per_litre_cents, ml)])),
         })),
       dates: openDates,
     });

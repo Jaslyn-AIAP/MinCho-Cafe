@@ -80,6 +80,8 @@
           <button id="refresh" type="button" class="small secondary">Refresh</button>
           <button id="export" type="button" class="small secondary">Download CSV</button>
         </div>
+        <p id="orders-msg" class="hint" role="status"></p>
+        <p id="orders-msg" class="hint" role="status"></p>
         <h2 class="gap-top">To brew</h2>
         <div id="brew" class="tiles"></div>
         <h2 class="gap-top">Order list</h2>
@@ -94,6 +96,7 @@
           <input id="new-date-note" type="text" placeholder="Note (optional)" maxlength="80" class="w-240">
           <button type="submit" class="small">Add date</button>
         </form>
+        <p id="date-msg" class="hint" role="status"></p>
         <p class="hint">Customers only see active dates that are still before the order cutoff. If none is left, customers see an "Orders paused" sign until you add one.</p>
         <div class="table-wrap"><table class="grid" id="dates-table"></table></div>
       </section>

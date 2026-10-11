@@ -130,6 +130,11 @@ main.wrap { padding-block: 0 140px; }
   box-shadow: 8px 8px 0 var(--shadow);
 }
 .card { border: 2px solid var(--jade); }
+/* Cards, panels and chits stay cream "paper" in dark mode, so their native
+   controls (checkboxes, radio buttons) must be drawn light too. Without this,
+   an UNticked checkbox shows as a solid black blob on iPhone in dark mode,
+   which looks ticked. */
+.card, .panel, .chit, .totalbar { color-scheme: light; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--jade); color: var(--on-jade); padding: 12px 18px; }
 .card-head strong { font-family: var(--font-hanzi); font-size: 1.15rem; }
 .card-head .mono { font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; }
@@ -263,7 +268,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .status-warn { font-weight: 700; font-size: 1rem; padding: 8px 12px; border-left: 4px solid; white-space: pre-line; color: var(--warn); border-color: var(--warn); background: var(--paper-2); }
 /* Admin: what customers see right now, above the tabs */
 .shop-status { margin: 12px 0 4px; line-height: 1.45; }
-.shop-status button.link { margin: 0; color: inherit; font-weight: 700; }
+.shop-status button.link { margin: 0; color: inherit; font-weight: 700; text-align: left; }
 .notice { display: flex; gap: 10px; border: 1px solid var(--red); background: #f4ddd4; color: #7d2717; padding: 10px 14px; font-weight: 600; font-size: 0.92rem; }
 
 /* ---- Receipt: carbon-copy order chit ------------------------------------------ */
@@ -333,6 +338,8 @@ table.grid th { font-family: var(--font-mono); font-weight: 400; font-size: 0.7r
 .between button.secondary { color: var(--page-ink); }
 .switch { display: flex; align-items: center; gap: 10px; font-weight: 700; }
 .switch input { width: 20px; height: 20px; accent-color: var(--jade); }
+/* Every tick box in jade, including ones in tables (e.g. Dates → Active) */
+input[type="checkbox"] { accent-color: var(--jade); width: 20px; height: 20px; }
 .w-200 { max-width: 200px; }
 .w-240 { max-width: 240px; }
 .break { font-size: 0.9rem; word-break: break-all; }
@@ -413,11 +420,44 @@ a.wa { color: var(--jade); font-size: 0.9rem; font-weight: 600; text-decoration:
 .sign-sub { margin: 14px 0 0; color: var(--muted); font-weight: 600; }
 .closed-head { font-family: var(--font-display); font-weight: 500; font-size: clamp(1.5rem, 5vw, 2rem); margin: 0 0 8px; color: var(--page-ink); }
 .closed-text { margin: 0 auto; max-width: 44ch; color: var(--page-muted); }
+.closed-nudge { margin: 12px auto 0; max-width: 44ch; font-weight: 700; color: var(--page-ink); }
 .closed button.back { margin-top: 24px; }
 .closed-msg { margin: 12px 0 0; color: var(--page-muted); font-size: 0.92rem; }
 .closed-foot { margin: 36px 0 0; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--page-muted); }
 
 /* "Orders paused" variant (open, but every date is past its cutoff):
    the sign hangs the other way, and the subtitle is a small-caps mono line. */
-.closed[data-reason="no-dates"] .sign { transform: rotate(2deg); }
-.closed[data-reason="no-dates"] .sign-sub { font-family: var(--font-mono); font-weight: 500; font-size: 0.85rem; letter-spacing: 0.14em; text-transform: uppercase; }
+.closed[data-reason="no-dates"] .sign, .closed[data-reason="no-menu"] .sign { transform: rotate(2deg); }
+.closed[data-reason="no-dates"] .sign-sub, .closed[data-reason="no-menu"] .sign-sub { font-family: var(--font-mono); font-weight: 500; font-size: 0.85rem; letter-spacing: 0.14em; text-transform: uppercase; }
+
+/* Admin → Dates on phones: one stacked card per date instead of a sideways-scrolling table.
+   Layout per date:  Sat 24 Oct            [✓] Active   [Delete]
+                     Orders close Fri 23 Oct, 11:59 pm
+                     note (if any)                                      */
+@media (max-width: 640px) {
+  #dates-table thead { display: none; }
+  #dates-table, #dates-table tbody { display: block; }
+  #dates-table tr { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  #dates-table td { border: 0; padding: 0; }
+  #dates-table td:nth-child(1) { grid-column: 1; grid-row: 1; font-weight: 700; }
+  #dates-table td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; color: var(--muted); font-size: 0.92rem; }
+  #dates-table td:nth-child(2)::before { content: "Orders close "; }
+  #dates-table td.closed-cut { text-transform: lowercase; }
+  #dates-table td.closed-cut::before { content: "Orders "; }
+  #dates-table td:nth-child(3) { grid-column: 1 / -1; grid-row: 3; color: var(--muted); font-size: 0.92rem; }
+  #dates-table td:nth-child(3):empty { display: none; }
+  #dates-table td:nth-child(4) { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 6px; font-size: 0.92rem; }
+  #dates-table td:nth-child(4)::after { content: "Active"; }
+  #dates-table td:nth-child(5) { grid-column: 3; grid-row: 1; }
+}
+
+/* Admin: make refusals impossible to miss.
+   .invalid  — the field that caused it (red border; cleared when edited)
+   .flash    — the message box pulses once when it appears
+   .flash-item — the existing size/date a duplicate refers to pulses once */
+input.invalid, select.invalid { border-color: var(--bad) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 25%, transparent); }
+@keyframes msg-flash { 0% { transform: scale(0.98); filter: brightness(1.15); } 100% { transform: none; filter: none; } }
+.status-ok.flash, .status-warn.flash, .status-bad.flash { animation: msg-flash 0.5s ease-out; }
+@keyframes item-flash { 0%, 60% { background: color-mix(in srgb, var(--bad) 22%, transparent); } 100% { background: transparent; } }
+.flash-item { animation: item-flash 1.6s ease-out; }
+input.invalid:focus, select.invalid:focus { outline-color: var(--bad); }

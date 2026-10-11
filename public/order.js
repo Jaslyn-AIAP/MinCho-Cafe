@@ -12,8 +12,11 @@
   const $ = (id) => document.getElementById(id);
   const money = (cents) => `$${(cents / 100).toFixed(2)}`;
   const sizeLabel = (ml) => (ml >= 1000 ? `${ml / 1000} L` : `${ml} ml`);
-  // What each size comes in ("packet" or "bottle"), from the menu or the order item
-  const containerFor = (ml, item) => item?.container || menu?.containers?.[ml] || 'bottle';
+  // A size is volume + container ({ ml: 500, container: 'packet' }); 500 ml can
+  // exist as both a packet and a bottle. Older order items without a container
+  // were all bottles.
+  const containerOf = (item) => item?.container || 'bottle';
+  const sizeName = (ml, container) => `${sizeLabel(ml)} ${container}`;
   const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const el = (tag, props = {}, ...children) => {
     const node = Object.assign(document.createElement(tag), props);
@@ -42,7 +45,7 @@
   // ---------------------------------------------------------------------------
   let menu = null;          // response from /api/menu
   let code = '';
-  const qty = new Map();    // key "product|ml" → number
+  const qty = new Map();    // key "product|ml|container" → number, e.g. "milk_tea|500|packet" → 2
   let turnstileToken = '';
   let turnstileWidget = null;
 
@@ -50,10 +53,13 @@
   //   'paused'   — the owners unticked "Shop open"
   //   'no-dates' — open, but no collection date is before its cutoff
   //                (e.g. the last round closed and the next date isn't added yet)
-  const closedReason = (m) => (!m.orderingOpen ? 'paused' : m.dates.length === 0 ? 'no-dates' : '');
+  //   'no-menu'  — open with dates, but no drink or no size is ticked on in admin
+  const closedReason = (m) => (!m.orderingOpen ? 'paused'
+    : m.dates.length === 0 ? 'no-dates'
+      : m.products.length === 0 || m.sizes.length === 0 ? 'no-menu' : '');
   // Wording for the shop-closed page, per reason. The sign changes too:
-  // 'paused' is the "Shop closed" sign, 'no-dates' the "Orders paused" sign
-  // (tilted the other way and with a small-caps subtitle; see styles.css).
+  // 'paused' is the "Shop closed" sign; 'no-dates' and 'no-menu' use the
+  // "Orders paused" sign (tilted the other way, small-caps subtitle; see styles.css).
   const CLOSED_TEXT = {
     'paused': {
       eyebrow: 'Order window', eyebrowZh: '暫停營業',
@@ -67,6 +73,14 @@
       head: 'This order window has closed.',
       body: 'All current brew dates are past their order cut-off. Ming Ming and QQ are catching their breath—we’ll post in the WhatsApp group when the next window opens.',
     },
+    'no-menu': {
+      eyebrow: 'Order status', eyebrowZh: '暫停接單',
+      zh: '暫停接單', title: 'Orders paused', sub: 'Shop open · Menu coming soon',
+      head: 'The menu is being updated.',
+      body: 'Ming Ming and QQ are updating what’s on offer—we’ll post in the WhatsApp group when orders open again.',
+      // No drinks or sizes on sale is usually a slip in admin, so ask customers to say something
+      nudge: 'Expecting to order now? Let Ming Ming or QQ know.',
+    },
   };
 
   function setClosedWording(why) {
@@ -76,6 +90,8 @@
       ['closed-title', 'title'], ['closed-sub', 'sub'], ['closed-head', 'head'], ['closed-text', 'body']]) {
       $(id).textContent = text[key];
     }
+    $('closed-nudge').textContent = text.nudge || '';
+    $('closed-nudge').hidden = !text.nudge;
   }
 
   const storage = {
@@ -164,9 +180,9 @@
     board.replaceChildren();
     for (const p of menu.products) {
       const rows = [];
-      for (const ml of menu.sizes) {
-        const key = `${p.id}|${ml}`;
-        const out = el('output', { textContent: String(qty.get(key) || 0), id: `q-${p.id}-${ml}` });
+      for (const { ml, container } of menu.sizes) {
+        const key = `${p.id}|${ml}|${container}`;
+        const out = el('output', { textContent: String(qty.get(key) || 0), id: `q-${p.id}-${ml}-${container}` });
         const change = (delta) => {
           const next = Math.max(0, Math.min(50, (qty.get(key) || 0) + delta));
           qty.set(key, next);
@@ -174,12 +190,12 @@
           updateTotal();
         };
         rows.push(el('div', { className: 'size-row' },
-          el('span', { className: 'size-name' }, el('b', { textContent: sizeLabel(ml) }), el('small', { textContent: containerFor(ml) })),
+          el('span', { className: 'size-name' }, el('b', { textContent: sizeLabel(ml) }), el('small', { textContent: container })),
           el('span', { className: 'price', textContent: money(p.bottlePrices[ml]) }),
           el('span', { className: 'stepper' },
-            el('button', { type: 'button', textContent: '−', ariaLabel: `Fewer ${p.name} ${sizeLabel(ml)} ${containerFor(ml)}`, onclick: () => change(-1) }),
+            el('button', { type: 'button', textContent: '−', ariaLabel: `Fewer ${p.name} ${sizeName(ml, container)}`, onclick: () => change(-1) }),
             out,
-            el('button', { type: 'button', textContent: '+', ariaLabel: `More ${p.name} ${sizeLabel(ml)} ${containerFor(ml)}`, onclick: () => change(1) })),
+            el('button', { type: 'button', textContent: '+', ariaLabel: `More ${p.name} ${sizeName(ml, container)}`, onclick: () => change(1) })),
         ));
       }
       board.append(el('div', { className: 'drink' },
@@ -230,8 +246,8 @@
     return [...qty.entries()]
       .filter(([, n]) => n > 0)
       .map(([key, n]) => {
-        const [product_id, ml] = key.split('|');
-        return { product_id, size_ml: Number(ml), qty: n };
+        const [product_id, ml, container] = key.split('|');
+        return { product_id, size_ml: Number(ml), container, qty: n };
       });
   }
 
@@ -243,7 +259,7 @@
       const p = menu.products.find((x) => x.id === item.product_id);
       subtotal += p.bottlePrices[item.size_ml] * item.qty;
       bottles += item.qty;
-      const c = containerFor(item.size_ml);
+      const c = containerOf(item);
       counts[c] = (counts[c] || 0) + item.qty;
     }
     // Mirrors lib/rules.js deliveryFeeCents(); the server has the final say.
@@ -403,7 +419,7 @@
     const amount = (o.totalCents / 100).toFixed(2);
 
     const rows = o.items.map((i) => el('tr', {},
-      el('td', {}, el('b', { textContent: i.product_name }), el('small', { textContent: `${sizeLabel(i.size_ml)} ${containerFor(i.size_ml, i)} × ${i.qty}` })),
+      el('td', {}, el('b', { textContent: i.product_name }), el('small', { textContent: `${sizeName(i.size_ml, containerOf(i))} × ${i.qty}` })),
       el('td', { className: 'amt', textContent: money(i.line_total_cents) })));
     if (o.deliveryFeeCents) rows.push(el('tr', {}, el('td', {}, el('b', { textContent: 'Delivery' })), el('td', { className: 'amt', textContent: money(o.deliveryFeeCents) })));
 

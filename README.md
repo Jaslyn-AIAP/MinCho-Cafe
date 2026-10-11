@@ -1,6 +1,6 @@
 # MinCho Cafe — order site
 
-Invite-only ordering for MinCho Cafe (Ming Ming & QQ). Customers enter a shared invite code, pick a date and their tea (250 ml packets, 500 ml and 1 L bottles), and pay by PayNow. Owners manage everything from `/admin`.
+Invite-only ordering for MinCho Cafe (Ming Ming & QQ). Customers enter a shared invite code, pick a date and their tea (sizes such as 250 ml, 500 ml and 1 L, each as a packet or a bottle, set by the owners), and pay by PayNow. Owners manage everything from `/admin`.
 
 - **Hosting:** Cloudflare Pages (static pages + server functions), free plan
 - **Database and owner login:** Supabase (PostgreSQL + Auth), free plan
@@ -149,6 +149,8 @@ Check it under **Workers & Pages → mincho-keepalive → Logs** the next day.
 - **Change prices:** Menu & prices. Old orders keep the price they were placed at.
 - **Sizes:** Menu & prices → Sizes. Untick a size to stop offering it, or add one and choose **Packet** or **Bottle**. Its price is worked out from the price per litre.
 - **Database set up before 10 Oct 2026 evening?** Run `supabase/migrations_003_packets.sql` once in the SQL Editor (adds packet/bottle).
+- **Database set up before 11 Oct 2026?** Run `supabase/migrations_004_size_containers.sql` once in the SQL Editor. It lets one volume exist as both a packet and a bottle (e.g. 500 ml packet and 500 ml bottle), and sets the menu to 250 ml, 500 ml and 1 L packets with the bottles unticked.
+- **Sizes:** Menu & prices → Sizes. A size is a volume in ml plus packet or bottle. Price is per litre, so a 500 ml packet and a 500 ml bottle cost the same. Tick or untick each one separately.
 - **Code leaked?** Settings → **Make a new code**, then share the new link.
 - **Housekeeping:** Settings → Old orders → delete orders older than N days (default 90). This supports Personal Data Protection Act obligations not to keep personal data longer than needed.
 

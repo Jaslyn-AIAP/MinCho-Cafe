@@ -41,7 +41,8 @@ beforeEach(() => {
     if (path.startsWith('settings')) return ok([state.settings]);
     if (path.startsWith('products')) return ok(state.products);
     if (path.startsWith('bottle_sizes')) return ok(state.sizes);
-    if (path.startsWith('delivery_dates')) return ok(state.dates);
+    // Honour the "active only" filter, as Supabase does, so unticked dates are really tested
+    if (path.startsWith('delivery_dates')) return ok(path.includes('active=eq.true') ? state.dates.filter((d) => d.active) : state.dates);
     if (path.startsWith('orders?select=id')) return ok(state.orders.slice(0, 5));
     if (path === 'orders' && init.method === 'POST') {
       const row = JSON.parse(init.body);
@@ -132,7 +133,7 @@ test('menu requires invite code and hides past dates', async () => {
   const data = await good.json();
   assert.equal(data.dates.length, 1);
   assert.equal(data.products[0].bottlePrices[250], 450);
-  assert.deepEqual(data.containers, { 250: 'packet', 500: 'bottle', 1000: 'bottle' });
+  assert.deepEqual(data.sizes, [{ ml: 250, container: 'packet' }, { ml: 500, container: 'bottle' }, { ml: 1000, container: 'bottle' }]);
   assert.equal(JSON.stringify(data).includes('81234567'), false, 'PayNow number only revealed after ordering');
 });
 
@@ -145,4 +146,16 @@ test('server applies free delivery threshold', async () => {
   const small = await (await placeOrder({ request: req({ ...goodOrder(), fulfilment: 'delivery', address: 'Blk 1 Bishan St 11 #01-01', items: [{ product_id: 'lemon_tea', size_ml: 1000, qty: 1 }] }), env })).json();
   assert.equal(small.deliveryFeeCents, 500);
   assert.equal(small.totalCents, 1700);
+});
+
+test('an unticked (inactive) date is hidden from the menu and refused for orders', async () => {
+  state.dates.push({ id: 3, delivery_date: '2099-10-24', active: false, note: '' });
+  const menu = await (await getMenu({ request: new Request('https://x', { method: 'POST', body: '{"code":"TEA-1234"}' }), env })).json();
+  assert.deepEqual(menu.dates.map((d) => d.date), ['2099-10-17']);
+  const res = await placeOrder({ request: req({ ...goodOrder(), dateId: 3 }), env });
+  assert.equal(res.status, 400);
+  assert.equal(state.orders.length, 0);
+  // Tick it again: now it is offered and accepted
+  state.dates[2].active = true;
+  assert.equal((await placeOrder({ request: req({ ...goodOrder(), dateId: 3 }), env })).status, 201);
 });

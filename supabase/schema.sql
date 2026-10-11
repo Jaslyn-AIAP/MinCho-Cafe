@@ -75,12 +75,13 @@ create table public.products (
   sort_order            int  not null default 0
 );
 
--- Sizes on sale. `container` is what the customer receives at that size:
--- 250 ml comes in a packet, 500 ml and 1 L in bottles.
+-- Sizes on sale. A size is a volume (in ml) AND a container: 500 ml packet and
+-- 500 ml bottle are two different sizes. Prices depend on volume only (per litre).
 create table public.bottle_sizes (
-  ml        int primary key check (ml > 0 and ml <= 5000),
+  ml        int not null check (ml > 0 and ml <= 5000),
   container text not null default 'bottle' check (container in ('bottle', 'packet')),
-  active    boolean not null default true
+  active    boolean not null default true,
+  constraint bottle_sizes_pkey primary key (ml, container)
 );
 
 -- ---------------------------------------------------------------------------
@@ -208,6 +209,6 @@ insert into public.products (id, name, description, price_per_litre_cents, sort_
   ('milk_tea',  'Hong Kong Milk Tea', 'Hand-brewed, silky and strong', 1800, 1),
   ('lemon_tea', 'Hong Kong Lemon Tea', 'Hand-brewed with fresh lemon',  1200, 2);
 
-insert into public.bottle_sizes (ml, container) values (250, 'packet'), (500, 'bottle'), (1000, 'bottle');
+insert into public.bottle_sizes (ml, container) values (250, 'packet'), (500, 'packet'), (1000, 'packet');
 
 insert into public.delivery_dates (delivery_date) values ('2026-10-17'), ('2026-10-24');
