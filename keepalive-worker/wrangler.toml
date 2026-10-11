@@ -7,5 +7,6 @@ compatibility_date = "2026-10-01"
 SITE_URL = "https://mincho-cafe.pages.dev"
 
 [triggers]
-# Every day at 02:17 UTC (10:17 am Singapore time)
-crons = ["17 2 * * *"]
+# Twice a week: Monday and Thursday 00:17 UTC = 08:17 Singapore time (gaps of 3 and 4 days,
+# inside Supabase's 7-day pause window, with room for one failed ping)
+crons = ["17 0 * * 1,4"]

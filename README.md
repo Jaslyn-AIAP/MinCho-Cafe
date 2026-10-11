@@ -127,16 +127,16 @@ Notification failures never block an order; they are logged in **Pages → your 
 
 ## 8. Keep the database awake
 
-Supabase's free plan pauses a project after about a week with no activity, and a paused project must be restored by hand from the dashboard. Orders are weekly, so one quiet week could break the order form. The `keepalive-worker/` pings the site once a day:
+Supabase's free plan pauses a project after about 7 days of low activity ("a few requests each day" keeps it active). A paused project keeps its data, but the order form and admin page stop working until someone clicks **Resume project** in Supabase; it can be resumed for up to a year. The `keepalive-worker/` pings the site's `/api/health` twice a week (Monday and Thursday, 08:17 Singapore time) to prevent this. Supabase publishes no exact threshold; reads are enough, and real orders add activity too.
 
-```bash
-# From a computer with Node.js installed, inside the keepalive-worker folder.
-# First edit SITE_URL in wrangler.toml to your real Pages address.
-npx wrangler login      # opens a browser to log in to the owners' Cloudflare account
-npx wrangler deploy     # deploys the worker with its daily schedule
-```
+Set up in the Cloudflare dashboard (no install needed):
+1. **Workers & Pages → Create → Start with Hello World!** Name it `mincho-keepalive`, **Deploy**.
+2. **Edit code**: replace everything with `keepalive-worker/worker.js`, **Deploy**.
+3. **Settings → Variables and Secrets → Add**: Text, `SITE_URL` = `https://mincho-cafe.pages.dev`, **Deploy**.
+4. **Settings → Trigger events → Add → Cron Triggers**: `17 0 * * 1,4`, **Add**.
+5. Check the worker's logs after the next run: `keepalive 200 {"ok":true}`.
 
-Check it under **Workers & Pages → mincho-keepalive → Logs** the next day.
+(Alternative with Node.js installed: `cd keepalive-worker`, `npx wrangler login`, `npx wrangler deploy`.)
 
 > Assumption: a daily read through the API counts as "activity" for Supabase. This is widely reported to work but is not a documented guarantee. If the project still pauses, the options are restoring it from the dashboard or moving to the Supabase Pro plan.
 
