@@ -322,10 +322,12 @@ table.grid { width: 100%; border-collapse: collapse; font-size: 0.92rem; font-va
 table.grid th, table.grid td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
 table.grid th { font-family: var(--font-mono); font-weight: 400; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
 .pill { display: inline-block; padding: 1px 8px; font-size: 0.78rem; font-weight: 700; border: 1px solid currentColor; }
-.pill.awaiting_payment { color: var(--warn); }
+.pill.awaiting { color: var(--warn); }
 .pill.paid { color: var(--ok); }
 .pill.collected { color: var(--muted); }
 .pill.cancelled { color: var(--bad); }
+/* Collected but payment not confirmed in the bank: the case that loses money */
+.pill.danger { color: var(--on-red); background: var(--bad); border-color: var(--bad); }
 .tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .tile { border: 1px solid var(--line); padding: 12px; background: var(--paper-2); }
 .tile .big { font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -471,3 +473,20 @@ input.invalid:focus, select.invalid:focus { outline-color: var(--bad); }
   .logo-hk { margin-left: 0; }
   .strip-name { display: none; }
 }
+
+/* Admin → To brew: the "still to collect" line under each drink's total */
+.tile .still { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+
+/* Admin → Orders: payment/collection controls and the who/when record */
+.order-actions { margin-top: 8px; gap: 14px; }
+.order-actions .switch { font-weight: 600; }
+.hint.audit { font-size: 0.8rem; margin-top: 6px; }
+.tile .owed { color: var(--bad); font-weight: 700; }
+.unconfirmed { margin: 0 0 14px; }
+.unconfirmed ul { margin: 6px 0 0; padding-left: 18px; font-weight: 400; }
+.unconfirmed .hint { color: inherit; font-weight: 400; margin-top: 2px; }
+@media (max-width: 640px) {
+  #orders-table td:nth-child(5) { display: block; }
+}
+/* The money tile (last in "To brew") has the most text: give it the full row */
+#brew .tile:last-child { grid-column: 1 / -1; }

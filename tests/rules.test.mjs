@@ -86,7 +86,11 @@ test('phone normalisation', () => {
 
 test('order reference format', () => {
   const ref = makeOrderRef('2026-10-17', new Uint8Array([0, 1, 2, 3]));
-  assert.match(ref, /^MC1017-[A-Z2-9]{4}$/);
+  // Letters and digits only (bank apps refuse dashes), random part letters only, no I/L/O
+  assert.match(ref, /^MC1017[A-HJKMNP-Z]{4}$/);
+  for (let n = 0; n < 500; n++) {
+    assert.match(makeOrderRef('2026-12-05', crypto.getRandomValues(new Uint8Array(4))), /^MC1205[A-HJKMNP-Z]{4}$/);
+  }
 });
 
 test('safeEqual', () => {

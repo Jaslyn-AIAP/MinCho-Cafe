@@ -26,7 +26,12 @@
 create table public.admins (
   user_id    uuid primary key references auth.users (id) on delete cascade,
   email      text not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Only the PayNow account holder (QQ) should have this. Set in the SQL Editor;
+  -- owners cannot change it themselves (read-only access to their own row).
+  can_confirm_payments boolean not null default false,
+  -- Name shown in the order record, e.g. "Confirmed: QQ 2026-10-11 21:40"
+  display_name text check (display_name is null or char_length(display_name) between 1 and 30)
 );
 
 -- Helper used by every policy. SECURITY DEFINER lets it read `admins` even
@@ -102,7 +107,7 @@ create table public.delivery_dates (
 -- ---------------------------------------------------------------------------
 create table public.orders (
   id                 uuid primary key default gen_random_uuid(),
-  order_ref          text not null unique,               -- e.g. MC1017-K7QF
+  order_ref          text not null unique,               -- e.g. MC1017KQXV (before 11 Oct 2026: MC1017-K7QF)
   delivery_date_id   bigint not null references public.delivery_dates (id) on delete restrict,
   customer_name      text not null check (char_length(customer_name) between 1 and 80),
   phone              text not null check (phone ~ '^[89][0-9]{7}$'),    -- Singapore mobile (8xxx xxxx or 9xxx xxxx)
@@ -113,8 +118,20 @@ create table public.orders (
   subtotal_cents     int not null check (subtotal_cents >= 0),
   delivery_fee_cents int not null default 0 check (delivery_fee_cents >= 0),
   total_cents        int not null check (total_cents >= 0),
-  status             text not null default 'awaiting_payment'
-                     check (status in ('awaiting_payment', 'paid', 'collected', 'cancelled')),
+  status             text not null default 'active'
+                     constraint orders_status_check check (status in ('active', 'cancelled')),
+  -- Payment: unpaid -> screenshot (customer says paid) -> confirmed (seen in the bank).
+  -- Collection is separate. Who/when are filled in by orders_guard_and_stamp().
+  payment_status     text not null default 'unpaid'
+                     constraint orders_payment_status_check check (payment_status in ('unpaid', 'screenshot', 'confirmed')),
+  screenshot_at      timestamptz,
+  screenshot_by      text,
+  confirmed_at       timestamptz,
+  confirmed_by       text,
+  collected_at       timestamptz,
+  collected_by       text,
+  cancelled_at       timestamptz,
+  cancelled_by       text,
   pdpa_consent       boolean not null check (pdpa_consent = true),
   ip_hash            text,                               -- salted hash, only for rate limiting
   created_at         timestamptz not null default now(),
@@ -127,6 +144,74 @@ create table public.orders (
 
 create index orders_delivery_date_idx on public.orders (delivery_date_id);
 create index orders_rate_limit_idx    on public.orders (ip_hash, created_at);
+
+-- Only the PayNow account holder may confirm payments; who/when are stamped by
+-- the database, never trusted from the browser. (See migrations_005 for why.)
+create or replace function public.orders_guard_and_stamp()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  who         text;
+  may_confirm boolean;
+begin
+  -- No logged-in owner: the order-taking server function or the SQL Editor.
+  -- Both are trusted and never change these fields, so no checks.
+  if auth.uid() is null then
+    return new;
+  end if;
+
+  select coalesce(a.display_name, a.email), a.can_confirm_payments into who, may_confirm
+    from public.admins a where a.user_id = auth.uid();
+
+  -- Only the PayNow account holder may confirm, or undo a confirmation
+  if new.payment_status is distinct from old.payment_status
+     and 'confirmed' in (new.payment_status, old.payment_status)
+     and not coalesce(may_confirm, false) then
+    raise exception 'Only the owner who receives the PayNow money can confirm payments.'
+      using errcode = '42501';
+  end if;
+
+  -- Who/when are never taken from the browser: start from the stored values...
+  new.screenshot_at := old.screenshot_at;  new.screenshot_by := old.screenshot_by;
+  new.confirmed_at  := old.confirmed_at;   new.confirmed_by  := old.confirmed_by;
+  new.cancelled_at  := old.cancelled_at;   new.cancelled_by  := old.cancelled_by;
+
+  -- ...then record the step that just happened
+  if new.payment_status is distinct from old.payment_status then
+    if new.payment_status = 'unpaid' then
+      new.screenshot_at := null; new.screenshot_by := null;
+      new.confirmed_at  := null; new.confirmed_by  := null;
+    elsif new.payment_status = 'screenshot' then
+      new.confirmed_at := null; new.confirmed_by := null;
+      if old.payment_status = 'unpaid' then new.screenshot_at := now(); new.screenshot_by := who; end if;
+    else -- confirmed
+      new.confirmed_at := now(); new.confirmed_by := who;
+    end if;
+  end if;
+
+  -- Collected: the browser only says yes (any time) or no (null)
+  if (new.collected_at is null) <> (old.collected_at is null) then
+    if new.collected_at is null then new.collected_by := null;
+    else new.collected_at := now(); new.collected_by := who; end if;
+  else
+    new.collected_at := old.collected_at; new.collected_by := old.collected_by;
+  end if;
+
+  if new.status is distinct from old.status then
+    if new.status = 'cancelled' then new.cancelled_at := now(); new.cancelled_by := who;
+    else new.cancelled_at := null; new.cancelled_by := null; end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists orders_guard_and_stamp on public.orders;
+create trigger orders_guard_and_stamp before update on public.orders
+  for each row execute function public.orders_guard_and_stamp();
+
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security

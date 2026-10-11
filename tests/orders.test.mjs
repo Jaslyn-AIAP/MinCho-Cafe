@@ -68,7 +68,7 @@ test('valid order is saved with server-side price and owners notified', async ()
   assert.equal(res.status, 201, JSON.stringify(data));
   assert.equal(data.totalCents, 6750);
   assert.equal(data.paynowNumber, '81234567');
-  assert.match(data.orderRef, /^MC1017-/);
+  assert.match(data.orderRef, /^MC1017[A-Z]{4}$/);   // no dash: bank apps refuse it in PayNow messages
   assert.equal(state.orders[0].total_cents, 6750);
   assert.equal(state.orders[0].address, null);
   assert.equal(state.orders[0].phone, '91234567');

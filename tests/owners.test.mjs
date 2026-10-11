@@ -126,3 +126,13 @@ test('remove: not yourself, not the last owner; removal deletes the login', asyn
   // Jas's old token no longer works
   assert.equal((await call(owners.onRequestGet, { token: t, method: 'GET' })).status, 401);
 });
+
+test('a new owner is saved with the display name shown on orders; over-long names refused', async () => {
+  const t = loggedIn(JAS, 'jas@example.com');
+  assert.equal((await call(owners.onRequestPost, { token: t, body: { name: '  QQ ', email: 'qq@example.com', password: 'longpassword2' } })).status, 201);
+  assert.equal(state.admins.find((a) => a.email === 'qq@example.com').display_name, 'QQ');
+  assert.equal((await call(owners.onRequestPost, { token: t, body: { name: 'x'.repeat(31), email: 'long@example.com', password: 'longpassword2' } })).status, 400);
+  // Without a name (e.g. the first-owner setup) the row has no display_name; the page falls back to the email
+  assert.equal((await call(owners.onRequestPost, { token: t, body: { email: 'ming@example.com', password: 'longpassword3' } })).status, 201);
+  assert.equal('display_name' in state.admins.find((a) => a.email === 'ming@example.com'), false);
+});

@@ -75,6 +75,8 @@
       <!-- Orders -->
       <section id="tab-orders" class="panel">
         <h2>Orders</h2>
+        <!-- Screenshots not yet confirmed in the bank, across all dates (filled by admin.js) -->
+        <div id="unconfirmed" class="status-warn unconfirmed" role="status" hidden></div>
         <div class="row">
           <select id="order-date" aria-label="Delivery date" class="w-240"></select>
           <button id="refresh" type="button" class="small secondary">Refresh</button>
@@ -166,6 +168,7 @@
         <div class="table-wrap"><table class="grid" id="owners-table"></table></div>
         <form id="owner-form" class="stack gap-top" novalidate>
           <div class="row">
+            <div><label for="owner-name">Name (shown on orders, e.g. QQ)</label><input id="owner-name" type="text" autocomplete="off" maxlength="30" required></div>
             <div><label for="owner-email">New owner's email</label><input id="owner-email" type="email" autocomplete="off" required></div>
             <div><label for="owner-password">Starting password (10+ characters)</label><input id="owner-password" type="text" autocomplete="off" spellcheck="false" minlength="10" required></div>
           </div>

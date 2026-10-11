@@ -144,7 +144,13 @@ Check it under **Workers & Pages → mincho-keepalive → Logs** the next day.
 
 - **New week:** Dates → add the date. It appears to customers automatically and closes at the cutoff.
 - **Before brewing:** Orders → pick the date → **To brew** shows litres, packets and bottles per drink (cancelled orders excluded).
-- **Payments:** match PayNow references (e.g. `MC1017-K7QF`) and set the order to **Paid**, then **Collected**.
+- **Payments (from 11 Oct 2026, migration 005):** each order has a payment step and a separate **Collected** tick.
+  - **Not paid → Screenshot received → Confirmed in bank.** A screenshot is only the customer's claim (a real screenshot can show a transfer scheduled for later that never goes through). Only **Confirmed in bank** counts as money received.
+  - **Only QQ** (the PayNow account holder) can set **Confirmed in bank**; the database enforces it. To give the right: Supabase → SQL Editor → `update public.admins set can_confirm_payments = true where email = '<QQ's login email>';`
+  - Ticking **Collected** on an order that isn't confirmed asks for confirmation first.
+  - Every step records who did it and when. The Orders tab lists screenshots still waiting for confirmation, across all dates.
+  - PayNow references look like `MC1017KQXV` (before 11 Oct 2026: `MC1017-K7QF`; customers may type those without the dash). Customers WhatsApp their payment screenshots to Master Ming or QQ.
+  - Database set up before 11 Oct 2026? Run `supabase/migrations_005_payment_confirmation.sql` once.
 - **Turn on delivery later:** Settings → tick **Offer delivery**, set the fee and Save. Customers then see a Delivery option and an address box.
 - **Free delivery:** Settings → **Free delivery for orders from** (e.g. 50). Orders of that amount or more, counting drinks only, deliver free; smaller orders pay the delivery fee. 0 = never free. If the database was set up before this setting existed, run `supabase/migrations_002_free_delivery.sql` once in the SQL Editor.
 - **Minimum order:** Settings → Minimum order (0 = none).

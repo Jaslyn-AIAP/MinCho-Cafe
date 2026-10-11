@@ -34,12 +34,16 @@
     return new Date(Date.UTC(y, m - 1, d - rule.cutoff_days, hh, mm, ss) - 8 * 3600e3);
   }
   const formatSgt = (when, opts) => new Intl.DateTimeFormat('en-SG', { timeZone: 'Asia/Singapore', ...opts }).format(when);
-  const STATUSES = [
-    ['awaiting_payment', 'Awaiting payment'],
-    ['paid', 'Paid'],
-    ['collected', 'Collected'],
-    ['cancelled', 'Cancelled'],
+  // Payment steps (migration 005). "Confirmed in bank" can only be set by the owner
+  // whose bank account receives PayNow; the database enforces this, the page just
+  // greys the option out for everyone else.
+  const PAYMENT = [
+    ['unpaid', 'Not paid'],
+    ['screenshot', 'Screenshot received'],
+    ['confirmed', 'Confirmed in bank'],
   ];
+  const paymentLabel = (v) => (PAYMENT.find(([value]) => value === v) || [v, v])[1];
+  let me = { email: '', can_confirm_payments: false };   // the logged-in owner
 
   let sb;                 // Supabase client
   let settings, products, sizes, dates = [];
@@ -90,7 +94,17 @@
   }
 
   /** Current Singapore time as "2026-10-11 00:20", whatever the device's time zone. */
-  const stampSgt = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
+  // ISO 8601 timestamp in Singapore time, offset included, e.g. "2026-10-10T22:25:31+08:00".
+  // Accepts a Date or a database timestamp such as "2026-10-10T14:25:31.251934+00:00"
+  // (UTC from Supabase). Fractions beyond milliseconds are trimmed first, because some
+  // browsers reject 6-digit fractions. Singapore has no daylight saving: always +08:00.
+  const isoSgt = (value) => {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(String(value).replace(/(\.\d{3})\d+/, '$1'));
+    if (Number.isNaN(date.getTime())) return String(value);
+    return new Date(date.getTime() + 8 * 3600e3).toISOString().slice(0, 19) + '+08:00';
+  };
+  const stampSgt = () => isoSgt(new Date());
 
   /** A Singapore date-time as "Tue 13 Oct 2026, 11:59 pm" (matches the order page's style, plus the year). */
   function longSgt(when) {
@@ -208,8 +222,9 @@
 
   async function enter(session) {
     // Confirm this login is actually an owner
-    const { data: me } = await sb.from('admins').select('email').eq('user_id', session.user.id).maybeSingle();
-    if (!me) {
+    const { data: row } = await sb.from('admins').select('*').eq('user_id', session.user.id).maybeSingle();
+    if (row) me = { email: row.email, can_confirm_payments: Boolean(row.can_confirm_payments) };
+    if (!row) {
       await sb.auth.signOut();
       $('login').hidden = false;
       $('login-error').textContent = 'This account is not an owner account.';
@@ -316,41 +331,67 @@
     if (error) return say($('orders-msg'), `FAILED TO LOAD ORDERS. ${report(error)}`, 'bad');
     currentOrders = data;
     renderOrders();
+    await loadUnconfirmed();
   }
 
   function renderOrders() {
     const live = currentOrders.filter((o) => o.status !== 'cancelled');
 
-    // --- Brewing summary: litres per drink and bottles per size ---------------
-    const brew = $('brew');
-    brew.replaceChildren();
-    for (const p of products) {
+    // --- Brewing summary -----------------------------------------------------------
+    // Big number: everything ordered for this date (cancelled left out), so the brewing
+    // plan doesn't shrink on collection day. Second line: what is still to hand out
+    // (orders not yet marked Collected).
+    const sizeBreakdown = (orders, productId) => {
       let ml = 0;
       const bySize = new Map();
-      for (const o of live) for (const i of o.items) if (i.product_id === p.id) {
+      for (const o of orders) for (const i of o.items) if (i.product_id === productId) {
         ml += i.size_ml * i.qty;
-        // Counted per volume AND container: 500 ml packets and 500 ml bottles are brewed into different things
+        // Counted per volume AND container: 500 ml packets and 500 ml bottles are filled differently
         const key = `${i.size_ml}|${i.container || 'bottle'}`;
         bySize.set(key, (bySize.get(key) || 0) + i.qty);
       }
-      // "250 ml packet × 9 | 500 ml bottle × 7 | 1 L bottle × 1" — each item kept on one line,
-      // sorted by volume, then container
+      // "250 ml packet × 9 | 500 ml bottle × 7 | 1 L bottle × 1": sorted by volume, then container,
+      // each item kept on one line
       const parts = [...bySize.entries()]
-        .map(([key, n]) => { const [ml, container] = key.split('|'); return { ml: Number(ml), container, n }; })
-        .sort((a, b) => a.ml - b.ml || a.container.localeCompare(b.container))
-        .map(({ ml: v, container, n }) => el('span', { className: 'nowrap', textContent: `${itemSize(v, container)} × ${n}` }));
-      const breakdown = parts.length ? parts.flatMap((part, i) => (i ? [' | ', part] : [part])) : ['None'];
+        .map(([key, n]) => { const [v, container] = key.split('|'); return { v: Number(v), container, n }; })
+        .sort((a, b) => a.v - b.v || a.container.localeCompare(b.container))
+        .map(({ v, container, n }) => el('span', { className: 'nowrap', textContent: `${itemSize(v, container)} × ${n}` }));
+      return { ml, parts: parts.flatMap((part, i) => (i ? [' | ', part] : [part])) };
+    };
+    const litres = (ml) => `${(ml / 1000).toFixed(2)} L`;
+    const notCollected = live.filter((o) => !o.collected_at);
+
+    const brew = $('brew');
+    brew.replaceChildren();
+    for (const p of products) {
+      const all = sizeBreakdown(live, p.id);
+      const left = sizeBreakdown(notCollected, p.id);
+      const leftLine = all.ml === 0 ? []
+        : left.ml === 0 ? [el('div', { className: 'hint still', textContent: 'All collected ✓' })]
+          : [el('div', { className: 'hint still' }, el('b', { textContent: `Still to collect: ${litres(left.ml)}` }), el('br'), ...left.parts)];
       brew.append(el('div', { className: 'tile' },
         el('div', { className: 'hint', textContent: p.name }),
-        el('div', { className: 'big', textContent: `${(ml / 1000).toFixed(2)} L` }),
-        el('div', { className: 'hint' }, ...breakdown)));
+        el('div', { className: 'big', textContent: litres(all.ml) }),
+        el('div', { className: 'hint' }, ...(all.parts.length ? all.parts : ['None'])),
+        ...leftLine));
     }
-    const total = live.reduce((s, o) => s + o.total_cents, 0);
-    const paid = live.filter((o) => o.status !== 'awaiting_payment').reduce((s, o) => s + o.total_cents, 0);
+    // Money: only "Confirmed in bank" counts as received. Screenshots are claims.
+    const sum = (list) => list.reduce((s, o) => s + o.total_cents, 0);
+    const total = sum(live);
+    const confirmed = sum(live.filter((o) => o.payment_status === 'confirmed'));
+    const shotOnly = sum(live.filter((o) => o.payment_status === 'screenshot'));
+    const unpaid = total - confirmed - shotOnly;
+    const handedUnconfirmed = live.filter((o) => o.collected_at && o.payment_status !== 'confirmed');
     brew.append(el('div', { className: 'tile' },
-      el('div', { className: 'hint', textContent: `${live.length} orders` }),
+      el('div', { className: 'hint', textContent: plural(live.length, 'order') }),
       el('div', { className: 'big', textContent: money(total) }),
-      el('div', { className: 'hint', textContent: `${money(paid)} paid, ${money(total - paid)} waiting` })));
+      el('div', { className: 'hint' },
+        el('b', { textContent: `${money(confirmed)} confirmed in bank` }), el('br'),
+        `${money(shotOnly)} screenshot only, not confirmed`, el('br'),
+        `${money(unpaid)} not paid`),
+      handedUnconfirmed.length
+        ? el('div', { className: 'hint still owed', textContent: `⚠ ${money(sum(handedUnconfirmed))} handed over but not confirmed in bank (${plural(handedUnconfirmed.length, 'order')})` })
+        : ''));
 
     // --- Order table --------------------------------------------------------------
     const table = $('orders-table');
@@ -358,19 +399,10 @@
     const body = el('tbody');
     if (!currentOrders.length) body.append(el('tr', {}, el('td', { colSpan: 5, className: 'hint', textContent: 'No orders for this date yet.' })));
     for (const o of currentOrders) {
-      const status = el('select', { ariaLabel: `Status for ${o.order_ref}` },
-        ...STATUSES.map(([v, label]) => el('option', { value: v, textContent: label, selected: o.status === v })));
-      status.addEventListener('change', async () => {
-        const label = (v) => STATUSES.find(([value]) => value === v)[1];
-        const { error } = await sb.from('orders').update({ status: status.value }).eq('id', o.id);
-        if (error) { say($('orders-msg'), `FAILED TO SAVE. ${o.order_ref} is still ${label(o.status)}. ${report(error)}`, 'bad'); status.value = o.status; return; }
-        o.status = status.value;
-        renderOrders();
-        say($('orders-msg'), `${o.order_ref} (${o.customer_name}) marked ${label(o.status)}.`, 'ok');
-      });
+      const controls = orderControls(o);
       const items = o.items.map((i) => `${i.product_name.replace('Hong Kong ', '')} ${itemSize(i.size_ml, i.container)} × ${i.qty}`).join('\n');
       body.append(el('tr', {},
-        el('td', {}, el('strong', { textContent: o.order_ref }), el('br'), el('span', { className: 'pill ' + o.status, textContent: STATUSES.find(([v]) => v === o.status)[1] })),
+        el('td', {}, el('strong', { textContent: o.order_ref }), el('br'), ...orderBadges(o)),
         el('td', {},
           document.createTextNode(o.customer_name), el('br'),
           // Shown as "8123 0001"; tapping opens a WhatsApp chat (wa.me needs the
@@ -383,20 +415,134 @@
           o.notes ? el('div', { className: 'hint', textContent: `Note: ${o.notes}` }) : ''),
         el('td', { className: 'pre', textContent: items }),
         el('td', { textContent: money(o.total_cents) }),
-        el('td', {}, status)));
+        el('td', {}, ...controls)));
     }
     table.replaceChildren(head, body);
+  }
+
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  // Who did something: the owner's display name as the database stored it (e.g. "QQ").
+  // Older stamps may hold a login email instead; show just the part before "@".
+  const shortWho = (who) => (String(who || '').includes('@') ? String(who).split('@')[0] : String(who || ''));
+  // Same format as the ✓ / ✗ messages: "2026-10-11T21:40:05+08:00"
+  const when = isoSgt;
+
+  /** Coloured labels next to the order reference. */
+  function orderBadges(o) {
+    if (o.status === 'cancelled') return [el('span', { className: 'pill cancelled', textContent: 'Cancelled' })];
+    const pay = { unpaid: ['awaiting', 'Not paid'], screenshot: ['awaiting', 'Screenshot only'], confirmed: ['paid', 'Confirmed'] }[o.payment_status] || ['awaiting', o.payment_status];
+    const out = [el('span', { className: `pill ${pay[0]}`, textContent: pay[1] })];
+    if (o.collected_at) {
+      out.push(' ', o.payment_status === 'confirmed'
+        ? el('span', { className: 'pill collected', textContent: 'Collected' })
+        : el('span', { className: 'pill danger', textContent: 'Collected, payment not confirmed' }));
+    }
+    return out;
+  }
+
+  /** Payment dropdown, Collected tick box, Cancel/Restore, and the who/when record. */
+  function orderControls(o) {
+    const msg = $('orders-msg');
+    const save = async (change, okText) => {
+      const { error } = await sb.from('orders').update(change).eq('id', o.id);
+      if (error) {
+        // 42501 = the database refused a confirmation by an owner without the right
+        const text = error.code === '42501' ? 'Only the owner who receives the PayNow money can confirm payments.' : report(error);
+        say(msg, `FAILED TO SAVE. ${o.order_ref} is unchanged. ${text}`, 'bad');
+        renderOrders();
+        return false;
+      }
+      await loadOrders();   // reload so the database's who/when stamps show
+      say(msg, okText, 'ok');
+      return true;
+    };
+    const name = `${o.order_ref} (${o.customer_name})`;
+
+    if (o.status === 'cancelled') {
+      const restore = el('button', { type: 'button', className: 'small secondary', textContent: 'Restore order' });
+      confirmTap(restore, 'Restore order', () => save({ status: 'active' }, `${name} restored.`));
+      return [restore, auditLine(o)];
+    }
+
+    // Payment: the "Confirmed in bank" option is greyed out for owners without the right.
+    // If the order is already confirmed, they can't change it at all (the database would refuse).
+    const lockedConfirmed = o.payment_status === 'confirmed' && !me.can_confirm_payments;
+    const payment = el('select', { ariaLabel: `Payment for ${o.order_ref}`, disabled: lockedConfirmed },
+      ...PAYMENT.map(([v, label]) => el('option', {
+        value: v, selected: o.payment_status === v,
+        disabled: v === 'confirmed' && !me.can_confirm_payments && o.payment_status !== 'confirmed',
+        textContent: v === 'confirmed' && !me.can_confirm_payments ? `${label} (QQ only)` : label,
+      })));
+    payment.addEventListener('change', () => save({ payment_status: payment.value }, `${name}: payment set to "${paymentLabel(payment.value)}".`));
+
+    // Collected: handing over before the money is confirmed is where sellers lose money
+    const collected = el('input', { type: 'checkbox', checked: Boolean(o.collected_at), ariaLabel: `Collected ${o.order_ref}` });
+    collected.addEventListener('change', async () => {
+      if (collected.checked && o.payment_status !== 'confirmed') {
+        const sure = window.confirm(`${name}\n\nPayment is NOT confirmed in QQ's bank yet (${paymentLabel(o.payment_status)}).\nA screenshot is not proof of payment.\n\nHand over anyway?`);
+        if (!sure) { collected.checked = false; return; }
+      }
+      // The database records the real time; the value sent only means "yes"
+      await save({ collected_at: collected.checked ? new Date().toISOString() : null },
+        collected.checked ? `${name} marked collected.` : `${name} marked NOT collected.`);
+    });
+
+    const cancel = el('button', { type: 'button', className: 'small secondary', textContent: 'Cancel order' });
+    confirmTap(cancel, 'Cancel order', () => save({ status: 'cancelled' }, `${name} cancelled.`));
+
+    return [
+      payment,
+      el('div', { className: 'row order-actions' },
+        el('label', { className: 'switch' }, collected, 'Collected'),
+        cancel),
+      auditLine(o),
+    ];
+  }
+
+  /** "Screenshot: Ming 2026-10-11T20:22:10+08:00 · Confirmed: QQ 2026-10-11T21:00:42+08:00 · …" */
+  function auditLine(o) {
+    const parts = [];
+    if (o.screenshot_by) parts.push(`Screenshot: ${shortWho(o.screenshot_by)} ${when(o.screenshot_at)}`.trim());
+    if (o.confirmed_by) parts.push(`Confirmed: ${shortWho(o.confirmed_by)} ${when(o.confirmed_at)}`.trim());
+    if (o.collected_by) parts.push(`Collected: ${shortWho(o.collected_by)} ${when(o.collected_at)}`.trim());
+    if (o.cancelled_by) parts.push(`Cancelled: ${shortWho(o.cancelled_by)} ${when(o.cancelled_at)}`.trim());
+    return parts.length ? el('div', { className: 'hint audit', textContent: parts.join(' · ') }) : '';
+  }
+
+  // Screenshots waiting for QQ to confirm, across ALL dates, oldest first. In the
+  // court case it took an audit years later to notice; this keeps it in view.
+  async function loadUnconfirmed() {
+    const box = $('unconfirmed');
+    const { data, error } = await sb.from('orders')
+      .select('id, order_ref, customer_name, total_cents, screenshot_at, delivery_date_id')
+      .eq('payment_status', 'screenshot').eq('status', 'active').order('screenshot_at');
+    if (error || !data?.length) { box.hidden = true; box.replaceChildren(); return; }
+    const days = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400e3);
+    const dateOf = (id) => dates.find((d) => d.id === id)?.delivery_date || '';
+    box.hidden = false;
+    box.replaceChildren(
+      el('b', { textContent: `⚠ ${plural(data.length, 'screenshot')} not yet confirmed in bank (${money(data.reduce((s, o) => s + o.total_cents, 0))})` }),
+      el('div', { className: 'hint', textContent: me.can_confirm_payments
+        ? 'Check each one in your bank app (look for the order reference), then set it to Confirmed in bank.'
+        : 'QQ needs to check these in her bank app before they count as paid.' }),
+      el('ul', {}, ...data.map((o) => el('li', {
+        textContent: `${o.order_ref} · ${o.customer_name} · ${money(o.total_cents)} · for ${dateOf(o.delivery_date_id)} · waiting ${days(o.screenshot_at) === 0 ? 'since today' : `${plural(days(o.screenshot_at), 'day')}`}`,
+      }))));
   }
 
   // CSV export for spreadsheets / record keeping
   $('export').addEventListener('click', () => {
     const date = dates.find((d) => d.id === Number($('order-date').value));
-    const header = ['order_ref', 'date', 'name', 'phone', 'fulfilment', 'address', 'items', 'total', 'status', 'notes', 'created_at'];
+    const header = ['order_ref', 'date', 'name', 'phone', 'fulfilment', 'address', 'items', 'total', 'status', 'payment',
+      'screenshot_by', 'screenshot_at', 'confirmed_by', 'confirmed_at', 'collected_by', 'collected_at', 'notes', 'created_at'];
     const quote = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const rows = currentOrders.map((o) => [
       o.order_ref, date?.delivery_date, o.customer_name, o.phone, o.fulfilment, o.address,
       o.items.map((i) => `${i.product_name} ${itemSize(i.size_ml, i.container)} x${i.qty}`).join('; '),
-      (o.total_cents / 100).toFixed(2), o.status, o.notes, o.created_at,
+      (o.total_cents / 100).toFixed(2), o.status, paymentLabel(o.payment_status),
+      // Timestamps in Singapore time with offset, like the admin page shows them
+      o.screenshot_by, isoSgt(o.screenshot_at), o.confirmed_by, isoSgt(o.confirmed_at), o.collected_by, isoSgt(o.collected_at), o.notes, isoSgt(o.created_at),
     ].map(quote).join(','));
     const blob = new Blob(['﻿' + [header.join(','), ...rows].join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = el('a', { href: URL.createObjectURL(blob), download: `mincho-orders-${date?.delivery_date || 'all'}.csv` });
@@ -717,7 +863,8 @@
         });
       }
       body.append(el('tr', {},
-        el('td', { textContent: o.email }),
+        el('td', {}, o.display_name ? el('b', { textContent: o.display_name }) : '', o.display_name ? el('br') : '', o.email,
+          o.can_confirm_payments ? el('div', { className: 'hint', textContent: '✓ Can confirm payments' }) : ''),
         el('td', { textContent: new Date(o.created_at).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' }) }),
         el('td', {}, action)));
     }
@@ -727,15 +874,17 @@
   $('owner-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const msg = $('owner-msg');
+    const name = $('owner-name').value.trim();
     const email = $('owner-email').value.trim();
     const password = $('owner-password').value;
+    if (!name) { say(msg, 'FAILED TO ADD. Enter a name, e.g. QQ. It is shown on the orders they update.', 'bad', $('owner-name')); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say(msg, 'FAILED TO ADD. Enter a valid email.', 'bad', $('owner-email')); return; }
     if (password.length < 10) { say(msg, 'FAILED TO ADD. The starting password needs at least 10 characters.', 'bad', $('owner-password')); return; }
     say(msg, 'Adding…');
-    const r = await ownerApi('POST', { email, password });
+    const r = await ownerApi('POST', { name, email, password });
     if (!r.ok) { say(msg, `FAILED TO ADD. ${r.data.error || 'Please try again.'}`, 'bad', /email/i.test(r.data.error || '') ? $('owner-email') : null); return; }
     e.target.reset();
-    say(msg, `Added ${email} as an owner. Send them the starting password privately.`, 'ok');
+    say(msg, `Added ${name} (${email}) as an owner. Send them the starting password privately.`, 'ok');
     await loadOwners();
   });
 

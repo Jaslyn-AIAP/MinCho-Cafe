@@ -445,6 +445,9 @@
         payline('Amount', `$${amount}`, amount),
         payline('Reference', o.orderRef, o.orderRef)),
       el('p', { className: 'notice', textContent: 'Please put the order reference in the PayNow reference or comments field so QQ can match your payment.' }),
+      // Screenshots are not uploaded to the site (bank screenshots hold personal and account details);
+      // customers send them on WhatsApp, where they already talk to the owners.
+      el('p', { className: 'notice', textContent: 'After paying, WhatsApp a screenshot of your payment to Master Ming or QQ, with your order reference.' }),
       o.collectionNote ? el('p', { className: 'hint', textContent: o.collectionNote }) : '',
       el('p', { className: 'hint', textContent: 'Need to change or cancel? Message Ming Ming or QQ with your order reference.' }),
       el('div', { className: 'chit-foot' }, 'Thank you · ', el('span', { lang: 'zh-Hant', textContent: '多謝晒' }), ` · ${shortDate}`),
