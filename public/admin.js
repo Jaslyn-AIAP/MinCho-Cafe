@@ -1,5 +1,5 @@
 // =============================================================================
-// admin.js — owners' page (Ming Ming, QQ, Jaslyn)
+// admin.js — owners' page (owners: Ming, QQ, Jaslyn; customers know Ming as "Master Ming")
 // -----------------------------------------------------------------------------
 // Talks to Supabase directly using the PUBLISHABLE key + the owner's login.
 // That is safe because the database only lets users listed in `admins` read

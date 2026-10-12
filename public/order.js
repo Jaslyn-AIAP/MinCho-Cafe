@@ -65,21 +65,21 @@
       eyebrow: 'Order window', eyebrowZh: '暫停營業',
       zh: '今日休息', title: 'Shop closed', sub: 'Our kettles are resting for now.',
       head: 'We’ll be pouring again soon.',
-      body: 'Ming Ming and QQ are taking a breather between brews. We’ll post in the WhatsApp group when orders open again.',
+      body: 'Master Ming and QQ are taking a breather between brews. We’ll post in the WhatsApp group when orders open again.',
     },
     'no-dates': {
       eyebrow: 'Order status', eyebrowZh: '今期截單',
       zh: '今期截單', title: 'Orders paused', sub: 'Shop open · Next dates soon',
       head: 'This order window has closed.',
-      body: 'All current brew dates are past their order cut-off. Ming Ming and QQ are catching their breath—we’ll post in the WhatsApp group when the next window opens.',
+      body: 'All current brew dates are past their order cut-off. Master Ming and QQ are catching their breath—we’ll post in the WhatsApp group when the next window opens.',
     },
     'no-menu': {
       eyebrow: 'Order status', eyebrowZh: '暫停接單',
       zh: '暫停接單', title: 'Orders paused', sub: 'Shop open · Menu coming soon',
       head: 'The menu is being updated.',
-      body: 'Ming Ming and QQ are updating what’s on offer—we’ll post in the WhatsApp group when orders open again.',
+      body: 'Master Ming and QQ are updating what’s on offer—we’ll post in the WhatsApp group when orders open again.',
       // No drinks or sizes on sale is usually a slip in admin, so ask customers to say something
-      nudge: 'Expecting to order now? Let Ming Ming or QQ know.',
+      nudge: 'Expecting to order now? Let Master Ming or QQ know.',
     },
   };
 
@@ -449,7 +449,7 @@
       // customers send them on WhatsApp, where they already talk to the owners.
       el('p', { className: 'notice', textContent: 'After paying, WhatsApp a screenshot of your payment to Master Ming or QQ, with your order reference.' }),
       o.collectionNote ? el('p', { className: 'hint', textContent: o.collectionNote }) : '',
-      el('p', { className: 'hint', textContent: 'Need to change or cancel? Message Ming Ming or QQ with your order reference.' }),
+      el('p', { className: 'hint', textContent: 'Need to change or cancel? Message Master Ming or QQ with your order reference.' }),
       el('div', { className: 'chit-foot' }, 'Thank you · ', el('span', { lang: 'zh-Hant', textContent: '多謝晒' }), ` · ${shortDate}`),
     );
     done.hidden = false;

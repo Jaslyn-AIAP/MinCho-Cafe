@@ -18,7 +18,7 @@ export async function onRequestPost({ request, env }) {
     const { settings, products, sizes, dates } = await loadCatalogue(env);
 
     if (!safeEqual(code, settings.invite_code.trim().toUpperCase())) {
-      return json({ error: 'That invite code is not valid. Please check with Ming Ming or QQ.' }, 403);
+      return json({ error: 'That invite code is not valid. Please check with Master Ming or QQ.' }, 403);
     }
 
     const now = new Date();
